@@ -886,9 +886,9 @@ async function checkAfterSubmit(oldData) {
   const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
   const yyBound = yy ? [yy.player, yy.target] : [];
 
-  // check nongji
-  const nongjiEff = fresh.skillEffects && fresh.skillEffects[`nongji_r${fresh.round}`];
-  if (nongjiEff && nongjiEff.target && !yyBound.includes(nongjiEff.playerId)) {
+  // check nongji（浓鸡汤玩家在场就触发，让其在该阶段选目标）
+  const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
+  if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
     fresh.phase = 'nongji_peek';
     await dbSet(myRoom, fresh); return;
   }
@@ -920,42 +920,81 @@ function renderNongjiPeek(d) {
   hideAllSkillSections();
   document.getElementById('submitted-overlay').style.display = 'none';
   document.getElementById('jiangyou-phase').style.display = 'none';
-  const nongjiPeek = document.getElementById('nongji-peek-phase');
-  nongjiPeek.style.display = 'block';
+  document.getElementById('nongji-peek-phase').style.display = 'block';
 
-  const eff = d.skillEffects[`nongji_r${d.round}`];
-  const isNongjiPlayer = eff.playerId === myId;
+  const nongjiPlayer = allPlayers(d).find(p => p.roleId === 4);
+  if (!nongjiPlayer) return;
+  const isNongjiPlayer = nongjiPlayer.id === myId;
   const desc = document.getElementById('nongji-peek-desc');
+  const eff = d.skillEffects?.[`nongji_r${d.round}`];
 
-  if (isNongjiPlayer) {
-    const target = d.players[eff.target];
-    const targetDep = d.deploys[eff.target];
-    desc.textContent = `你查看了 ${target?.name} 的部署，现在可以决定是否重新部署。`;
-    document.getElementById('nongji-peek-content').innerHTML = `
-      <div class="card" style="margin-bottom:1rem">
-        <div class="card-title">${target?.name} 的部署</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-          ${Array.from({ length: 16 }, (_, i) => {
-            const t = targetDep?.troops?.[i] || 0;
-            return `<div style="text-align:center;padding:6px 4px;background:var(--bg3);border-radius:6px;font-size:13px">
-              <div style="font-size:10px;color:var(--text3)">${i + 1}号</div>
-              <div style="color:${t > 0 ? 'var(--gold)' : 'var(--text3)'}">${t}</div></div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    document.getElementById('nongji-redeploy-form').style.display = 'block';
-    nongjiRedeployData = [...(currentDeployData[d.round] || Array(17).fill(0))];
-    buildNongjiRedeployGrid(d.round);
-  } else {
-    desc.textContent = `浓鸡汤玩家正在查看情报并重新部署，请稍候…`;
+  if (!isNongjiPlayer) {
+    desc.textContent = `浓鸡汤玩家正在使用技能，请稍候…`;
     document.getElementById('nongji-peek-content').innerHTML = '';
     document.getElementById('nongji-redeploy-form').style.display = 'none';
-    // check if nongji done
-    if (d.deploys[eff.playerId]?.nongjiRedeployDone) {
+    if (d.deploys[nongjiPlayer.id]?.nongjiRedeployDone || d.deploys[nongjiPlayer.id]?.nongjiSkipped) {
       checkAfterNongji(d);
     }
+    return;
   }
+
+  // 浓鸡汤本人
+  if (!eff || !eff.target) {
+    // 第一步：选目标
+    desc.textContent = '所有人已提交，请选择一名玩家查看其部署，或跳过本轮技能';
+    const others = allPlayers(d).filter(p => p.id !== myId);
+    document.getElementById('nongji-peek-content').innerHTML = `
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title">选择查看对象</div>
+        <select id="nongji-target-late" style="margin-bottom:8px;width:100%">
+          <option value="">-- 选择玩家 --</option>
+          ${others.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+        </select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitNongjiLate()">查看该玩家部署</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipNongjiLate()">本轮不使用技能</button>
+      </div>`;
+    document.getElementById('nongji-redeploy-form').style.display = 'none';
+    return;
+  }
+
+  // 第二步：已选目标，查看并重新部署
+  const target = d.players[eff.target];
+  const targetDep = d.deploys[eff.target];
+  desc.textContent = `你查看了 ${target?.name} 的部署，现在可以决定是否重新部署。`;
+  document.getElementById('nongji-peek-content').innerHTML = `
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">${target?.name} 的部署</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        ${Array.from({ length: 16 }, (_, i) => {
+          const t = targetDep?.troops?.[i] || 0;
+          return `<div style="text-align:center;padding:6px 4px;background:var(--bg3);border-radius:6px;font-size:13px">
+            <div style="font-size:10px;color:var(--text3)">${i + 1}号</div>
+            <div style="color:${t > 0 ? 'var(--gold)' : 'var(--text3)'}">${t}</div></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  document.getElementById('nongji-redeploy-form').style.display = 'block';
+  nongjiRedeployData = [...(d.deploys[myId]?.troops ? [0, ...d.deploys[myId].troops] : Array(17).fill(0))];
+  buildNongjiRedeployGrid(d.round);
 }
+
+window.submitNongjiLate = async function () {
+  const target = document.getElementById('nongji-target-late').value;
+  if (!target) { toast('请选择玩家'); return; }
+  const d = await dbGet(myRoom);
+  if (!d.skillEffects) d.skillEffects = {};
+  d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
+  await dbSet(myRoom, d);
+};
+
+window.skipNongjiLate = async function () {
+  const d = await dbGet(myRoom);
+  if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].nongjiSkipped = true;
+  d.deploys[myId].nongjiRedeployDone = true;
+  await dbSet(myRoom, d);
+  checkAfterNongji(d);
+};
 
 function buildNongjiRedeployGrid(round) {
   const isDouble = round >= 5;
@@ -1026,13 +1065,42 @@ function renderJiangyouPhase(d) {
   const desc = document.getElementById('jiangyou-desc');
 
   if (isJYPlayer) {
-    desc.textContent = '现在可以移动你的1枚军队到另一个城池（计分前生效）。';
+    desc.textContent = '现在可以查看所有玩家的部署后移动你的1枚军队（计分前生效）。';
     document.getElementById('jiangyou-form').style.display = 'block';
     const myTroops = d.deploys[myId]?.troops || Array(16).fill(0);
     const fromOpts = myTroops.map((t, i) => t > 0 ? `<option value="${i + 1}">${i + 1}号城（${t}兵）</option>` : '').filter(Boolean).join('');
     document.getElementById('jy-from').innerHTML = fromOpts || '<option>无可移动的兵</option>';
     document.getElementById('jy-to').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
+    // 显示所有玩家部署
+    const allPlayersList = allPlayers(d);
+    let overviewHtml = `<div class="card" style="margin-bottom:1rem"><div class="card-title">所有玩家部署</div>`;
+    overviewHtml += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">`;
+    for (let c = 1; c <= 16; c++) {
+      const isDouble = d.round >= 5;
+      const cellLines = allPlayersList
+        .map(p => ({ name: p.name, color: p.color, t: d.deploys[p.id]?.troops?.[c - 1] || 0 }))
+        .filter(p => p.t > 0)
+        .sort((a, b) => b.t - a.t)
+        .map(p => `<div style="display:flex;justify-content:space-between;padding:1px 0">
+          <span style="color:${p.color}">${p.name}</span><span style="color:${p.color};font-weight:500">${p.t}</span></div>`).join('');
+      overviewHtml += `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 4px">
+        <div style="text-align:center;color:var(--text3);margin-bottom:4px">${c}号${isDouble ? ' ×2' : ''}</div>
+        ${cellLines || '<div style="text-align:center;color:var(--text3)">—</div>'}
+      </div>`;
+    }
+    overviewHtml += `</div></div>`;
+    // insert before jiangyou-form
+    const jyForm = document.getElementById('jiangyou-form');
+    let existingOverview = document.getElementById('jiangyou-overview');
+    if (existingOverview) existingOverview.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'jiangyou-overview';
+    wrap.innerHTML = overviewHtml;
+    jyForm.parentNode.insertBefore(wrap, jyForm);
   } else {
+    // 非酱油鸡玩家
+    const existingOverview = document.getElementById('jiangyou-overview');
+    if (existingOverview) existingOverview.remove();
     desc.textContent = `酱油鸡玩家正在移动军队，请稍候…`;
     document.getElementById('jiangyou-form').style.display = 'none';
     if (d.deploys[jyPlayer?.id]?.jiangyouDone) calcResult(d);
