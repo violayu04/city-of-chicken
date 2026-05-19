@@ -907,10 +907,7 @@ async function checkAfterSubmit(oldData) {
     fresh.phase = 'jiangyou_move';
     await dbSet(myRoom, fresh); return;
   }
-  calcResult(fresh);
-}
-
-function renderWaiting(d) {
+  calcResult(fresh);(d) {
   const players = allPlayers(d);
   const deps = d.deploys || {};
   document.getElementById('waiting-list').innerHTML = players.map(p => {
@@ -1071,8 +1068,11 @@ window.skipJiangyou = async function () {
 
 // ── Calc result ──
 async function calcResult(data) {
-  const fresh = await dbGet(myRoom);
-  if (fresh.phase === 'result' || fresh.phase === 'final' || fresh.phase === 'calculating') return;
+  // data가 없으면 직접 fetch, 있으면 그대로 사용
+  const fresh = data || await dbGet(myRoom);
+  // calculating 상태에서 호출된 경우(checkAfterSubmit에서) 정상 진행
+  // 이미 result/final이면 중단
+  if (fresh.phase === 'result' || fresh.phase === 'final') return;
 
   const round = fresh.round, isDouble = round >= 5;
   const players = allPlayers(fresh);
