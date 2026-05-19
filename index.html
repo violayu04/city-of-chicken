@@ -266,30 +266,6 @@ input[type=checkbox]{width:auto;padding:0}
       </div>
     </div>
 
-    <!-- 左宗鸡 -->
-    <div id="zuozong-section" style="display:none">
-      <div class="skill-card">
-        <div class="skill-card-title">倒数加餐 · 选择目标玩家</div>
-        <div class="skill-card-desc">若该玩家本轮结算后（不含左宗鸡/白斩鸡加分）累计总分在最低三名之内，你获得10分（不受双倍加成）。</div>
-        <select id="zuozong-target" style="margin-bottom:8px">
-          <option value="">-- 选择玩家 --</option>
-        </select>
-        <button class="btn btn-gold" style="width:100%" onclick="submitZuozong()">确认选择</button>
-        <button class="btn" style="width:100%;margin-top:6px" onclick="skipZuozong()">本轮不使用</button>
-      </div>
-    </div>
-
-    <!-- 白斩鸡 -->
-    <div id="baizhan-section" style="display:none">
-      <div class="skill-card">
-        <div class="skill-card-title">切准肥瘦 · 预测本轮结束后累计排名</div>
-        <div class="skill-card-desc">基于其他所有技能结算完（不含左宗鸡/白斩鸡加分）后的累计排名判断，猜对一人+2分（不翻倍）。</div>
-        <div id="baizhan-rank-inputs"></div>
-        <button class="btn btn-gold" style="width:100%;margin-top:8px" onclick="submitBaizhan()">提交预测</button>
-        <button class="btn" style="width:100%;margin-top:6px" onclick="skipBaizhan()">本轮不预测</button>
-      </div>
-    </div>
-
     <!-- 等待提交 -->
     <div class="submitted-overlay" id="submitted-overlay" style="display:none">
       <div class="submitted-icon">🏰</div>
@@ -413,13 +389,13 @@ const ROLES = [
   { id: 2, name: "炸鸡桶", skill: "炸鸡（前4轮1次）：摧毁目标城所有兵，获等同兵数的分" },
   { id: 3, name: "可乐鸡翅", skill: "甜咸互换（3次，5/6轮1次）：秘密调换两城价值，差≤6" },
   { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人提交后，可看一名玩家放置再重新决定" },
-  { id: 5, name: "左宗鸡", skill: "倒数加餐：选一玩家，若其本轮累计最低三名之一，你+10分" },
+  { id: 5, name: "左宗鸡", skill: "倒数加餐（手动调分）：选一玩家，若其本轮累计最低三名之一，主持人为你+10分" },
   { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，未得分者扣原始分" },
   { id: 7, name: "鸳鸯鸡", skill: "口味双拼（3次，5/6轮1次）：强制合作，各放17兵，同城合计≤12，收益平分" },
   { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若本轮累计唯一最低，偷所有人各2分" },
   { id: 9, name: "大盘鸡", skill: "加量吃撑（3次，5/6轮1次）：额外最多12兵，未得分兵每个-2" },
   { id: 10, name: "酱油鸡", skill: "放点酱油（3次，5/6轮1次）：结算前可移动1枚自己的兵" },
-  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦：预测累计排名（不含左宗/白斩加分），猜对一人+2分" },
+  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦（手动调分）：预测累计排名，主持人按猜对人数为你+2分/人" },
   { id: 12, name: "口水鸡", skill: "半块添香：军队可按0.5使用" }
 ];
 const COLORS = ["#c9a84c","#4c7ec9","#c94c4c","#4caa7c","#9f6bc9","#c97e4c","#4cbcc9","#c94c8a","#7ec94c","#c9c94c","#4c4cc9","#888888"];
@@ -543,7 +519,7 @@ function renderLobby(d) {
 }
 
 // ── Deploy phase ──
-const SKILL_SECTIONS = ['laziji','zhaji','kele','nongji','huangmen','yuanyang','dapan','zuozong','baizhan'];
+const SKILL_SECTIONS = ['laziji','zhaji','kele','nongji','huangmen','yuanyang','dapan'];
 function hideAllSkillSections() { SKILL_SECTIONS.forEach(s => { const el = document.getElementById(s + '-section'); if (el) el.style.display = 'none'; }); }
 
 function usesLeft(d, key, maxTotal, maxDouble) {
@@ -661,10 +637,6 @@ function buildSkillSections(d) {
     document.getElementById('nongji-section').style.display = 'block';
     document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
   }
-  if (myRole?.id === 5 && !myDep.zuozongDone) {
-    document.getElementById('zuozong-section').style.display = 'block';
-    document.getElementById('zuozong-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
-  }
   if (myRole?.id === 6 && !myDep.huangmenDone) {
     const left = usesLeft(d, 'huangmen', 3, 1);
     if (left > 0) {
@@ -687,15 +659,6 @@ function buildSkillSections(d) {
       document.getElementById('dapan-section').style.display = 'block';
       document.getElementById('dapan-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
     }
-  }
-  if (myRole?.id === 11 && !myDep.baizhanDone) {
-    document.getElementById('baizhan-section').style.display = 'block';
-    const players = allPlayers(d);
-    document.getElementById('baizhan-rank-inputs').innerHTML = players.map((_, i) =>
-      `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:12px;color:var(--text3);width:40px">第${i + 1}名</span>
-        <select id="bzp-${i}" style="flex:1"><option value="">-- 选 --</option>
-          ${players.map(pp => `<option value="${pp.id}">${pp.name}</option>`).join('')}</select></div>`).join('');
   }
 }
 
@@ -830,28 +793,6 @@ window.submitDapan = async function () {
   toast(`已申请额外 ${extra} 兵，总计 ${currentMaxArmy}`);
 };
 window.skipDapan = async function () { await patchDeploy({ dapanDone: true }); document.getElementById('dapan-section').style.display = 'none'; };
-
-window.submitZuozong = async function () {
-  const target = document.getElementById('zuozong-target').value;
-  if (!target) { toast('请选择目标玩家'); return; }
-  const d = await dbGet(myRoom);
-  d.skillEffects[`zuozong_r${d.round}`] = { target, playerId: myId };
-  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
-  d.deploys[myId].zuozongDone = true;
-  await dbSet(myRoom, d);
-  document.getElementById('zuozong-section').style.display = 'none'; toast('左宗鸡技能已提交 ✓');
-};
-window.skipZuozong = async function () { await patchDeploy({ zuozongDone: true }); document.getElementById('zuozong-section').style.display = 'none'; };
-
-window.submitBaizhan = async function () {
-  const d = await dbGet(myRoom);
-  const players = allPlayers(d);
-  const pred = players.map((_, i) => { const s = document.getElementById(`bzp-${i}`); return s ? s.value : ''; }).filter(Boolean);
-  if (new Set(pred).size !== pred.length) { toast('每个玩家只能选一次'); return; }
-  await patchDeploy({ baizhanPrediction: pred, baizhanDone: true });
-  document.getElementById('baizhan-section').style.display = 'none'; toast('预测已提交 ✓');
-};
-window.skipBaizhan = async function () { await patchDeploy({ baizhanDone: true }); document.getElementById('baizhan-section').style.display = 'none'; };
 
 // ── Submit deploy ──
 window.submitDeploy = async function () {
@@ -1294,33 +1235,6 @@ async function calcResult(data) {
   const baseTotal = {};
   players.forEach(p => { baseTotal[p.id] = (fresh.totalScores?.[p.id] || 0) + roundScores[p.id]; });
 
-  // 白斩鸡（基于baseTotal；被鸳鸯鸡绑则技能失效）
-  let baizhanDetail = null;
-  const bzP = players.find(p => p.roleId === 11);
-  if (bzP && !isYyBound(bzP.id)) {
-    const pred = deploys[bzP.id]?.baizhanPrediction || [];
-    const actualRanked = [...players].sort((a, b) => (baseTotal[b.id] || 0) - (baseTotal[a.id] || 0)).map(p => p.id);
-    let correct = 0; pred.forEach((pid, i) => { if (actualRanked[i] === pid) correct++; });
-    const bonus = correct * 2;
-    baizhanDetail = { playerId: bzP.id, predicted: pred, actual: actualRanked, correct, bonus };
-    if (bonus > 0) skillLog.push(`白斩鸡拼盘：${bzP.name} 猜对 ${correct} 人，+${bonus} 分`);
-  }
-
-  // 左宗鸡（基于baseTotal；被鸳鸯鸡绑则技能失效）
-  let zuozongDetail = null;
-  const zzEffRaw = effects[`zuozong_r${round}`];
-  const zzEff = (zzEffRaw && !isYyBound(zzEffRaw.playerId)) ? zzEffRaw : null;
-  if (zzEff) {
-    const zzPlayer = fresh.players[zzEff.playerId];
-    const target = fresh.players[zzEff.target];
-    const sorted = [...players].sort((a, b) => (baseTotal[b.id] || 0) - (baseTotal[a.id] || 0));
-    const targetRank = sorted.findIndex(p => p.id === zzEff.target);
-    const isBottom3 = targetRank >= sorted.length - 3;
-    zuozongDetail = { playerId: zzEff.playerId, target: zzEff.target, isBottom3 };
-    if (isBottom3) skillLog.push(`左宗鸡：${zzPlayer?.name} 选 ${target?.name}，${target?.name} 在最低三名，${zzPlayer?.name} +10分`);
-    else skillLog.push(`左宗鸡：${zzPlayer?.name} 选 ${target?.name}，${target?.name} 不在最低三名，无加分`);
-  }
-
   // 泡椒鸡爪（基于baseTotal；被鸳鸯鸡绑则技能失效）
   const paojiaoPlayer = players.find(p => p.roleId === 8);
   let paojiaoTriggered = false;
@@ -1333,9 +1247,7 @@ async function calcResult(data) {
     }
   }
 
-  // 把白斩/左宗/泡椒加分写入 roundScores
-  if (baizhanDetail && baizhanDetail.bonus > 0) roundScores[baizhanDetail.playerId] += baizhanDetail.bonus;
-  if (zuozongDetail && zuozongDetail.isBottom3) roundScores[zuozongDetail.playerId] += 10;
+  // 泡椒加分写入 roundScores
   if (paojiaoTriggered) {
     players.forEach(p => {
       if (p.id !== paojiaoPlayer.id) {
@@ -1362,8 +1274,6 @@ async function calcResult(data) {
     roundScores,
     totalScores,
     troopSnapshot,
-    baizhanDetail: baizhanDetail || null,
-    zuozongDetail: zuozongDetail || null,
     skillLog,
     deploys: {}
   });
