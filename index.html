@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>懦夫之城</title>
 <style>
-:root{--bg:#0e0e10;--bg2:#18181c;--bg3:#222228;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);--text:#f0ede8;--text2:#9e9b95;--text3:#5c5a56;--gold:#c9a84c;--gold2:#e8c97a;--red:#c94c4c;--green:#4caa7c;--radius:10px}
+:root{--bg:#0e0e10;--bg2:#18181c;--bg3:#222228;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);--text:#f0ede8;--text2:#9e9b95;--text3:#5c5a56;--gold:#c9a84c;--gold2:#e8c97a;--red:#c94c4c;--green:#4caa7c;--blue:#4c7ec9;--radius:10px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;font-weight:300;min-height:100vh;overflow-x:hidden}
 .wrap{max-width:680px;margin:0 auto;padding:2rem 1.25rem 4rem}
@@ -16,6 +16,7 @@ h1{font-family:'Songti SC','SimSun',STSong,serif;font-size:clamp(26px,6vw,40px);
 input,select{background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:14px;padding:9px 12px;outline:none;transition:border-color .2s;width:100%}
 input:focus,select:focus{border-color:var(--gold)}
 input[type=number]{text-align:center;padding:7px 4px}
+input[type=checkbox]{width:auto;padding:0}
 .btn{background:transparent;border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;padding:9px 20px;cursor:pointer;transition:all .2s}
 .btn:hover{background:var(--bg3);border-color:var(--gold);color:var(--gold)}
 .btn-gold{background:var(--gold);border-color:var(--gold);color:#0e0e10;font-weight:500}
@@ -24,6 +25,7 @@ input[type=number]{text-align:center;padding:7px 4px}
 .badge{display:inline-block;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text2)}
 .badge-gold{border-color:var(--gold);color:var(--gold);background:rgba(201,168,76,.08)}
 .badge-green{border-color:var(--green);color:var(--green);background:rgba(76,170,124,.08)}
+.badge-red{border-color:var(--red);color:var(--red);background:rgba(201,76,76,.08)}
 .screen{display:none}.screen.active{display:block}
 .room-code{font-family:'Songti SC','SimSun',serif;font-size:36px;font-weight:700;letter-spacing:.2em;color:var(--gold2);text-align:center;padding:1rem 0}
 .room-hint{font-size:12px;color:var(--text3);text-align:center;margin-top:4px}
@@ -45,11 +47,11 @@ input[type=number]{text-align:center;padding:7px 4px}
 .city-result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:1rem}
 .city-result-cell{background:var(--bg3);border-radius:8px;padding:8px 6px;text-align:center;border:1px solid var(--border)}
 .city-result-cell.won{border-color:var(--gold);background:rgba(201,168,76,.06)}
-.city-result-cell.huangmen-cell{border-color:var(--red);background:rgba(201,76,76,.06)}
+.city-result-cell.hm{border-color:var(--red);background:rgba(201,76,76,.06)}
 .city-pts{font-size:11px;color:var(--text3);margin-bottom:2px}
 .city-winner{font-size:12px;color:var(--gold);font-weight:500}
 .city-tie{font-size:11px;color:var(--text3)}
-.city-skill-tag{font-size:10px;color:var(--red);margin-top:2px}
+.city-tag{font-size:10px;color:var(--red);margin-top:2px}
 .score-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .score-row:last-child{border-bottom:none}
 .score-rank{font-size:18px;font-weight:700;font-family:'Songti SC','SimSun',serif;width:28px;text-align:center;color:var(--text3)}
@@ -82,6 +84,10 @@ input[type=number]{text-align:center;padding:7px 4px}
 .skill-card-desc{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px}
 .uses-left{font-size:11px;color:var(--gold);margin-bottom:8px}
 .reconnect-banner{background:rgba(201,168,76,.1);border:1px solid var(--gold);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1rem;display:none}
+.phase-banner{background:rgba(76,126,201,.1);border:1px solid var(--blue);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1rem;text-align:center}
+.phase-banner-title{font-size:15px;font-weight:500;color:#7ab0e8;margin-bottom:4px}
+.phase-banner-desc{font-size:12px;color:var(--text2)}
+.checkbox-row{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--text2)}
 </style>
 </head>
 <body>
@@ -89,6 +95,7 @@ input[type=number]{text-align:center;padding:7px 4px}
   <h1>懦夫之城</h1>
   <p class="tagline">CITY OF CHICKEN · 12人 · 16城 · 六轮</p>
 
+  <!-- 首页 -->
   <div class="screen active" id="screen-home">
     <div class="reconnect-banner" id="reconnect-banner">
       <div style="font-size:13px;color:var(--gold2);margin-bottom:6px">检测到上次的游戏记录</div>
@@ -115,6 +122,7 @@ input[type=number]{text-align:center;padding:7px 4px}
     </div>
   </div>
 
+  <!-- 大厅 -->
   <div class="screen" id="screen-lobby">
     <div class="flex-row-sb" style="margin-bottom:1rem">
       <div>
@@ -129,21 +137,30 @@ input[type=number]{text-align:center;padding:7px 4px}
       <div id="player-list"></div>
     </div>
     <div class="card" id="role-assignment-card" style="display:none">
-      <div class="card-title">选择你偏好的角色（最多4个，系统尽量安排）</div>
+      <div class="card-title">选择你偏好的角色（最多4个）</div>
       <div class="role-select-grid" id="role-select-grid"></div>
       <button class="btn btn-gold" style="width:100%" onclick="submitRolePref()">提交偏好</button>
     </div>
   </div>
 
+  <!-- 部署阶段 -->
   <div class="screen" id="screen-deploy">
     <div class="flex-row-sb" style="margin-bottom:1rem">
       <div>
         <div class="phase-label" id="round-label">第1轮</div>
-        <div style="font-size:20px;font-weight:500">秘密部署军队</div>
+        <div style="font-size:20px;font-weight:500" id="deploy-title">秘密部署军队</div>
       </div>
       <span class="badge" id="round-badge">1/6</span>
     </div>
     <div class="my-role-card" id="my-role-display"></div>
+
+    <!-- 鸳鸯鸡合作通知 -->
+    <div id="yuanyang-notice" style="display:none">
+      <div class="phase-banner">
+        <div class="phase-banner-title">🤝 鸳鸯鸡发起合作</div>
+        <div class="phase-banner-desc" id="yuanyang-notice-text"></div>
+      </div>
+    </div>
 
     <div id="deploy-form">
       <div class="army-bar">
@@ -152,19 +169,38 @@ input[type=number]{text-align:center;padding:7px 4px}
         <span class="army-count" id="army-count">0 / 12</span>
       </div>
       <div class="city-grid" id="city-grid"></div>
-      <button class="btn btn-gold" style="width:100%" onclick="submitDeploy()">提交部署（对其他人隐藏）</button>
+      <button class="btn btn-gold" style="width:100%" onclick="submitDeploy()">提交部署</button>
     </div>
 
-    <div id="baizhan-section" style="display:none">
+    <!-- 技能面板 -->
+    <!-- 辣子鸡丁 -->
+    <div id="laziji-section" style="display:none">
       <div class="skill-card">
-        <div class="skill-card-title">切准肥瘦 · 预测本轮结束后累计排名</div>
-        <div class="skill-card-desc">按预测名次从高到低选玩家，猜对一人+2分（不受双倍加成）</div>
-        <div id="baizhan-rank-inputs"></div>
-        <button class="btn btn-gold" style="width:100%;margin-top:8px" onclick="submitBaizhan()">提交预测</button>
-        <button class="btn" style="width:100%;margin-top:6px" onclick="skipBaizhan()">本轮不预测</button>
+        <div class="skill-card-title">火辣袭击 · 选择发动技能的城池</div>
+        <div class="skill-card-desc">本轮你选择的城池中，所有其他玩家的军队-3（可以变负，负数按0计算）。只能使用1次。</div>
+        <select id="laziji-city" style="margin-bottom:8px">
+          <option value="">-- 选择城池（不使用则跳过）--</option>
+        </select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitLaziji()">使用技能</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipLaziji()">本轮不使用</button>
       </div>
     </div>
 
+    <!-- 炸鸡桶 -->
+    <div id="zhaji-section" style="display:none">
+      <div class="skill-card">
+        <div class="skill-card-title">炸鸡 · 选择投放城池</div>
+        <div class="skill-card-desc">摧毁该城所有玩家的军队（包括你自己），你获得等同于被摧毁总兵数的分数。前4轮可用1次。</div>
+        <div class="uses-left" id="zhaji-uses"></div>
+        <select id="zhaji-city" style="margin-bottom:8px">
+          <option value="">-- 选择城池 --</option>
+        </select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitZhaji()">投放炸鸡</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipZhaji()">本轮不使用</button>
+      </div>
+    </div>
+
+    <!-- 可乐鸡翅 -->
     <div id="kele-section" style="display:none">
       <div class="skill-card">
         <div class="skill-card-title">甜咸互换 · 秘密调换两个城池的实际价值</div>
@@ -180,6 +216,20 @@ input[type=number]{text-align:center;padding:7px 4px}
       </div>
     </div>
 
+    <!-- 浓鸡汤 -->
+    <div id="nongji-section" style="display:none">
+      <div class="skill-card">
+        <div class="skill-card-title">鸡汤慢炖 · 选择要查看的玩家</div>
+        <div class="skill-card-desc">所有人提交后，你将看到该玩家的部署，然后可以重新决定你的放置。</div>
+        <select id="nongji-target" style="margin-bottom:8px">
+          <option value="">-- 选择玩家 --</option>
+        </select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitNongji()">确认选择</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipNongji()">本轮不使用</button>
+      </div>
+    </div>
+
+    <!-- 黄焖鸡 -->
     <div id="huangmen-section" style="display:none">
       <div class="skill-card">
         <div class="skill-card-title">双倍滋味 · 秘密选择一个城池</div>
@@ -191,6 +241,19 @@ input[type=number]{text-align:center;padding:7px 4px}
       </div>
     </div>
 
+    <!-- 鸳鸯鸡 -->
+    <div id="yuanyang-section" style="display:none">
+      <div class="skill-card">
+        <div class="skill-card-title">口味双拼 · 选择合作玩家</div>
+        <div class="skill-card-desc">强制与该玩家合作，双方各放17兵（单城两人合计≤12，否则该城双方归0），本轮收益平分，双方不能使用其他技能。3次限制，5/6轮只能用1次。</div>
+        <div class="uses-left" id="yuanyang-uses"></div>
+        <select id="yuanyang-target" style="margin-bottom:8px"></select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitYuanyang()">发起合作</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipYuanyang()">本轮不使用</button>
+      </div>
+    </div>
+
+    <!-- 大盘鸡 -->
     <div id="dapan-section" style="display:none">
       <div class="skill-card">
         <div class="skill-card-title">加量吃撑 · 申请额外军队</div>
@@ -206,14 +269,79 @@ input[type=number]{text-align:center;padding:7px 4px}
       </div>
     </div>
 
+    <!-- 左宗鸡 -->
+    <div id="zuozong-section" style="display:none">
+      <div class="skill-card">
+        <div class="skill-card-title">倒数加餐 · 选择目标玩家</div>
+        <div class="skill-card-desc">若该玩家本轮结算后（不含左宗鸡/白斩鸡加分）累计总分在最低三名之内，你获得10分（不受双倍加成）。</div>
+        <select id="zuozong-target" style="margin-bottom:8px">
+          <option value="">-- 选择玩家 --</option>
+        </select>
+        <button class="btn btn-gold" style="width:100%" onclick="submitZuozong()">确认选择</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipZuozong()">本轮不使用</button>
+      </div>
+    </div>
+
+    <!-- 白斩鸡 -->
+    <div id="baizhan-section" style="display:none">
+      <div class="skill-card">
+        <div class="skill-card-title">切准肥瘦 · 预测本轮结束后累计排名</div>
+        <div class="skill-card-desc">基于其他所有技能结算完（不含左宗鸡/白斩鸡加分）后的累计排名判断，猜对一人+2分（不翻倍）。</div>
+        <div id="baizhan-rank-inputs"></div>
+        <button class="btn btn-gold" style="width:100%;margin-top:8px" onclick="submitBaizhan()">提交预测</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipBaizhan()">本轮不预测</button>
+      </div>
+    </div>
+
+    <!-- 等待提交 -->
     <div class="submitted-overlay" id="submitted-overlay" style="display:none">
       <div class="submitted-icon">🏰</div>
-      <div style="font-size:16px;font-weight:500;margin-bottom:6px">已提交！</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:1.5rem">等待其他玩家提交中…</div>
+      <div style="font-size:16px;font-weight:500;margin-bottom:6px" id="waiting-title">已提交！</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:1.5rem" id="waiting-desc">等待其他玩家提交中…</div>
       <div class="waiting-list" id="waiting-list"></div>
+    </div>
+
+    <!-- 浓鸡汤查看阶段 -->
+    <div id="nongji-peek-phase" style="display:none">
+      <div class="phase-banner" style="margin-bottom:1rem">
+        <div class="phase-banner-title">🍲 鸡汤慢炖</div>
+        <div class="phase-banner-desc" id="nongji-peek-desc"></div>
+      </div>
+      <div id="nongji-peek-content"></div>
+      <div id="nongji-redeploy-form" style="display:none">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:8px">重新部署你的军队（可选）：</div>
+        <div class="army-bar">
+          <span style="font-size:12px;color:var(--text3)">已部署</span>
+          <div class="army-track"><div class="army-fill" id="army-fill2" style="width:0%"></div></div>
+          <span class="army-count" id="army-count2">0 / 12</span>
+        </div>
+        <div class="city-grid" id="city-grid2"></div>
+        <button class="btn btn-gold" style="width:100%" onclick="submitNongjiRedeploy()">确认重新部署</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipNongjiRedeploy()">保持原部署</button>
+      </div>
+    </div>
+
+    <!-- 酱油鸡阶段 -->
+    <div id="jiangyou-phase" style="display:none">
+      <div class="phase-banner" style="margin-bottom:1rem">
+        <div class="phase-banner-title">🫙 放点酱油</div>
+        <div class="phase-banner-desc" id="jiangyou-desc"></div>
+      </div>
+      <div id="jiangyou-form" style="display:none">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">选择要移动的军队：</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text3)">从</span>
+          <select id="jy-from" style="flex:1;min-width:100px"></select>
+          <span style="font-size:12px;color:var(--text3)">移到</span>
+          <select id="jy-to" style="flex:1;min-width:100px"></select>
+        </div>
+        <button class="btn btn-gold" style="width:100%" onclick="submitJiangyou()">确认移动</button>
+        <button class="btn" style="width:100%;margin-top:6px" onclick="skipJiangyou()">不移动</button>
+      </div>
     </div>
   </div>
 
+  <!-- 结算 -->
   <div class="screen" id="screen-result">
     <div class="flex-row-sb" style="margin-bottom:1rem">
       <div>
@@ -235,7 +363,8 @@ input[type=number]{text-align:center;padding:7px 4px}
       <div id="skill-log-content"></div>
     </div>
     <div class="card" id="host-adjust-card" style="display:none">
-      <div class="card-title">主持人手动调分（左宗鸡 / 白斩鸡）</div>
+      <div class="card-title">主持人手动调分</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">用于处理特殊情况或争议</div>
       <div id="host-adjust-list"></div>
       <button class="btn btn-gold" style="width:100%;margin-top:10px" onclick="applyAdjustments()">确认调分</button>
     </div>
@@ -247,6 +376,7 @@ input[type=number]{text-align:center;padding:7px 4px}
     </div>
   </div>
 
+  <!-- 最终排名 -->
   <div class="screen" id="screen-final">
     <div style="margin-bottom:1.5rem">
       <div class="phase-label">游戏结束</div>
@@ -265,13 +395,8 @@ const SUPABASE_URL = 'https://tdrzpsvlucvyicfxrayb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkcnpwc3ZsdWN2eWljZnhyYXliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMzk0ODUsImV4cCI6MjA5NDcxNTQ4NX0.dbkf730h9uZwXvVJXcpZgppi9DyGgNwoL70a9Bo9XQ0';
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function dbSet(code, data) {
-  await sb.from('rooms').upsert({ code, data: JSON.stringify(data), updated_at: new Date().toISOString() });
-}
-async function dbGet(code) {
-  const { data } = await sb.from('rooms').select('data').eq('code', code).single();
-  return data ? JSON.parse(data.data) : null;
-}
+async function dbSet(code, data) { await sb.from('rooms').upsert({ code, data: JSON.stringify(data), updated_at: new Date().toISOString() }); }
+async function dbGet(code) { const { data } = await sb.from('rooms').select('data').eq('code', code).single(); return data ? JSON.parse(data.data) : null; }
 let rtCh = null;
 function listenDB(code, cb) {
   if (rtCh) sb.removeChannel(rtCh);
@@ -287,45 +412,37 @@ function loadSession() { try { return JSON.parse(localStorage.getItem('cc_s') ||
 window.clearAndHome = function () { localStorage.removeItem('cc_s'); location.reload(); };
 
 const ROLES = [
-  { id: 1, name: "辣子鸡丁", skill: "火辣袭击（1次）：本轮同格其他军队-3" },
-  { id: 2, name: "炸鸡桶", skill: "炸鸡（前4轮1次）：摧毁目标城所有兵，获同等分" },
+  { id: 1, name: "辣子鸡丁", skill: "火辣袭击（1次）：选一城池，该城其他玩家军队-3" },
+  { id: 2, name: "炸鸡桶", skill: "炸鸡（前4轮1次）：摧毁目标城所有兵，获等同兵数的分" },
   { id: 3, name: "可乐鸡翅", skill: "甜咸互换（3次，5/6轮1次）：秘密调换两城价值，差≤6" },
-  { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人选完后，可看一名玩家放置再决定" },
-  { id: 5, name: "左宗鸡", skill: "倒数加餐：选一玩家，若本轮得分最低三名之一获10分（不翻倍）" },
-  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，所有未得分者扣该城原始分（5/6轮×2）" },
-  { id: 7, name: "鸳鸯鸡", skill: "口味双拼（3次，5/6轮1次）：公开合作，各放17兵单城≤12，收益平分" },
-  { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若本轮总榜唯一最低，偷所有人各2分" },
+  { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人提交后，可看一名玩家放置再重新决定" },
+  { id: 5, name: "左宗鸡", skill: "倒数加餐：选一玩家，若其本轮累计最低三名之一，你+10分" },
+  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，未得分者扣原始分" },
+  { id: 7, name: "鸳鸯鸡", skill: "口味双拼（3次，5/6轮1次）：强制合作，各放17兵，同城合计≤12，收益平分" },
+  { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若本轮累计唯一最低，偷所有人各2分" },
   { id: 9, name: "大盘鸡", skill: "加量吃撑（3次，5/6轮1次）：额外最多12兵，未得分兵每个-2" },
-  { id: 10, name: "酱油鸡", skill: "放点酱油（3次，5/6轮1次）：公布后计分前可移动1枚自己的兵" },
-  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦：每轮预测累计排名，猜对一人+2分（不翻倍）" },
+  { id: 10, name: "酱油鸡", skill: "放点酱油（3次，5/6轮1次）：结算前可移动1枚自己的兵" },
+  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦：预测累计排名（不含左宗/白斩加分），猜对一人+2分" },
   { id: 12, name: "口水鸡", skill: "半块添香：军队可按0.5使用" }
 ];
 const COLORS = ["#c9a84c","#4c7ec9","#c94c4c","#4caa7c","#9f6bc9","#c97e4c","#4cbcc9","#c94c8a","#7ec94c","#c9c94c","#4c4cc9","#888888"];
 
 let myId = null, myName = '', myRoom = '', isHost = false, myRole = null;
-let currentDeployData = {};
+let currentDeployData = {}, currentMaxArmy = 12;
+let nongjiRedeployData = [];
 
-function toast(msg, dur = 2500) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), dur);
-}
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
-}
-function genCode() {
-  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  return Array.from({ length: 4 }, () => c[Math.floor(Math.random() * c.length)]).join('');
-}
+function toast(msg, dur = 2500) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), dur); }
+function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById('screen-' + id).classList.add('active'); }
+function genCode() { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; return Array.from({ length: 4 }, () => c[Math.floor(Math.random() * c.length)]).join(''); }
+function otherPlayers(d) { return Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p })).filter(p => p.id !== myId); }
+function allPlayers(d) { return Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p })); }
 
 // Auto reconnect
 (async () => {
   const s = loadSession(); if (!s) return;
   const d = await dbGet(s.myRoom);
   if (!d || !d.players || !d.players[s.myId]) return;
-  const p = d.players[s.myId];
-  const role = ROLES.find(r => r.id === p.roleId);
+  const role = ROLES.find(r => r.id === d.players[s.myId].roleId);
   document.getElementById('reconnect-info').textContent = `房间 ${s.myRoom} · ${s.myName}（${role ? role.name : '未分配'}）· 第${d.round || 0}轮`;
   document.getElementById('reconnect-banner').style.display = 'block';
 })();
@@ -335,11 +452,8 @@ window.doReconnect = async function () {
   const d = await dbGet(s.myRoom);
   if (!d) { toast('房间已不存在'); localStorage.removeItem('cc_s'); return; }
   myId = s.myId; myName = s.myName; myRoom = s.myRoom; isHost = s.isHost;
-  const me = d.players[myId];
-  if (me) myRole = ROLES.find(r => r.id === me.roleId);
-  if (isHost) {
-    document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
-  }
+  const me = d.players[myId]; if (me) myRole = ROLES.find(r => r.id === me.roleId);
+  if (isHost) document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
   document.getElementById('lobby-code').textContent = myRoom;
   listenDB(myRoom, onRoomUpdate);
 };
@@ -348,15 +462,13 @@ window.createRoom = async function () {
   const name = document.getElementById('host-name').value.trim();
   if (!name) { toast('请输入你的名字'); return; }
   const code = genCode();
-  myId = 'p_' + Date.now(); myName = name; myRoom = code; isHost = true;
-  saveSession();
+  myId = 'p_' + Date.now(); myName = name; myRoom = code; isHost = true; saveSession();
   await dbSet(code, { host: myId, round: 0, phase: 'lobby', players: { [myId]: { name, color: COLORS[0], roleId: 0 } }, skillState: {}, skillEffects: {} });
   listenDB(code, onRoomUpdate);
   showScreen('lobby');
   document.getElementById('lobby-code').textContent = code;
   document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
-  buildRoleGrid();
-  document.getElementById('role-assignment-card').style.display = 'block';
+  buildRoleGrid(); document.getElementById('role-assignment-card').style.display = 'block';
 };
 
 window.joinRoom = async function () {
@@ -364,22 +476,18 @@ window.joinRoom = async function () {
   const name = document.getElementById('join-name').value.trim();
   if (!code || code.length !== 4) { toast('请输入4位房间码'); return; }
   if (!name) { toast('请输入你的名字'); return; }
-  const d = await dbGet(code);
-  if (!d) { toast('房间不存在'); return; }
-  const players = d.players || {};
-  const count = Object.keys(players).length;
+  const d = await dbGet(code); if (!d) { toast('房间不存在'); return; }
+  const players = d.players || {}; const count = Object.keys(players).length;
   if (count >= 12) { toast('房间已满'); return; }
   if (Object.values(players).some(p => p.name === name)) { toast('名字已被使用'); return; }
   myId = 'p_' + Date.now() + Math.random().toString(36).slice(2, 6);
-  myName = name; myRoom = code; isHost = false;
-  saveSession();
+  myName = name; myRoom = code; isHost = false; saveSession();
   d.players[myId] = { name, color: COLORS[count % COLORS.length], roleId: 0 };
   await dbSet(code, d);
   listenDB(code, onRoomUpdate);
   showScreen('lobby');
   document.getElementById('lobby-code').textContent = code;
-  buildRoleGrid();
-  document.getElementById('role-assignment-card').style.display = 'block';
+  buildRoleGrid(); document.getElementById('role-assignment-card').style.display = 'block';
 };
 
 let selectedRoles = [];
@@ -397,14 +505,13 @@ window.toggleRole = function (id) {
 };
 window.submitRolePref = async function () {
   if (!selectedRoles.length) { toast('至少选1个'); return; }
-  const d = await dbGet(myRoom);
-  d.players[myId].rolePrefs = selectedRoles;
+  const d = await dbGet(myRoom); d.players[myId].rolePrefs = selectedRoles;
   await dbSet(myRoom, d); toast('已提交偏好 ✓');
 };
 
 window.startGame = async function () {
   const d = await dbGet(myRoom);
-  const pList = Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p }));
+  const pList = allPlayers(d);
   if (pList.length < 2) { toast('至少需要2名玩家'); return; }
   const shuffled = [...ROLES].sort(() => Math.random() - .5);
   const assigned = {}; const used = new Set();
@@ -418,13 +525,15 @@ window.startGame = async function () {
 function onRoomUpdate(d) {
   renderLobby(d);
   if (d.phase === 'deploy') renderDeploy(d);
+  if (d.phase === 'nongji_peek') renderNongjiPeek(d);
+  if (d.phase === 'jiangyou_move') renderJiangyouPhase(d);
   if (d.phase === 'result') renderResult(d);
   if (d.phase === 'final') renderFinal(d);
 }
 
 function renderLobby(d) {
   if (d.phase !== 'lobby') return;
-  const players = Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p }));
+  const players = allPlayers(d);
   document.getElementById('player-count').textContent = players.length;
   document.getElementById('player-list').innerHTML = players.map(p => {
     const role = ROLES.find(r => r.id === p.roleId);
@@ -436,34 +545,62 @@ function renderLobby(d) {
   }).join('');
 }
 
+// ── Deploy phase ──
+const SKILL_SECTIONS = ['laziji','zhaji','kele','nongji','huangmen','yuanyang','dapan','zuozong','baizhan'];
+function hideAllSkillSections() { SKILL_SECTIONS.forEach(s => { const el = document.getElementById(s + '-section'); if (el) el.style.display = 'none'; }); }
+
+function usesLeft(d, key, maxTotal, maxDouble) {
+  const st = d.skillState || {};
+  if ((st[key + '_used'] || 0) >= maxTotal) return 0;
+  if (d.round >= 5 && (st[key + '_usedDouble'] || 0) >= maxDouble) return 0;
+  return maxTotal - (st[key + '_used'] || 0);
+}
+
 function renderDeploy(d) {
   if (d.phase !== 'deploy') return;
   showScreen('deploy');
   const round = d.round, isDouble = round >= 5;
   document.getElementById('round-label').textContent = `第${round}轮${isDouble ? ' · 双倍得分' : ''}`;
+  document.getElementById('deploy-title').textContent = '秘密部署军队';
   document.getElementById('round-badge').textContent = `${round}/6`;
   document.getElementById('round-badge').className = 'badge' + (isDouble ? ' badge-gold' : '');
+
   const me = d.players[myId];
   if (me) { myRole = ROLES.find(r => r.id === me.roleId); if (myRole) document.getElementById('my-role-display').innerHTML = `<div class="my-role-name">${myRole.name}</div><div class="my-role-skill">${myRole.skill}</div>`; }
-  const myDep = d.deploys && d.deploys[myId];
-  if (myDep && myDep.submitted) {
+
+  // 鸳鸯鸡合作通知
+  const effects = d.skillEffects || {};
+  const yyEff = effects[`yuanyang_r${round}`];
+  const yyNotice = document.getElementById('yuanyang-notice');
+  if (yyEff && (yyEff.target === myId || yyEff.player === myId)) {
+    const partner = yyEff.target === myId ? d.players[yyEff.player] : d.players[yyEff.target];
+    document.getElementById('yuanyang-notice-text').textContent = `${partner?.name} 与你强制合作！本轮各放17兵，同城合计≤12，收益平分。`;
+    yyNotice.style.display = 'block';
+  } else yyNotice.style.display = 'none';
+
+  const myDep = d.deploys && d.deploys[myId] || {};
+  const isYuanyangPartner = yyEff && (yyEff.target === myId || yyEff.player === myId);
+  const armyMax = isYuanyangPartner ? 17 : 12 + (myDep.dapanExtra || 0);
+  currentMaxArmy = armyMax;
+
+  if (myDep.submitted) {
     document.getElementById('deploy-form').style.display = 'none';
-    hideSkillSections();
+    hideAllSkillSections();
     document.getElementById('submitted-overlay').style.display = 'block';
+    document.getElementById('nongji-peek-phase').style.display = 'none';
+    document.getElementById('jiangyou-phase').style.display = 'none';
     renderWaiting(d);
   } else {
     document.getElementById('deploy-form').style.display = 'block';
     document.getElementById('submitted-overlay').style.display = 'none';
-    buildCityGrid(round);
+    document.getElementById('nongji-peek-phase').style.display = 'none';
+    document.getElementById('jiangyou-phase').style.display = 'none';
+    buildCityGrid(round, armyMax);
     buildSkillSections(d);
   }
 }
 
-function hideSkillSections() {
-  ['baizhan-section', 'kele-section', 'huangmen-section', 'dapan-section'].forEach(id => document.getElementById(id).style.display = 'none');
-}
-
-function buildCityGrid(round) {
+function buildCityGrid(round, maxArmy) {
   const isDouble = round >= 5;
   if (!currentDeployData[round]) currentDeployData[round] = Array(17).fill(0);
   const grid = document.getElementById('city-grid'); grid.innerHTML = '';
@@ -473,77 +610,99 @@ function buildCityGrid(round) {
       <input type="number" min="0" max="12" step="${myRole?.id === 12 ? 0.5 : 1}" value="${currentDeployData[round][c] || ''}" placeholder="0" oninput="updateDeploy(${round},${c},this.value)" />`;
     grid.appendChild(cell);
   }
-  updateArmyBar(round, 12);
+  updateArmyBar(round, maxArmy, 'army-fill', 'army-count');
 }
 
-window.updateDeploy = function (round, city, val) { currentDeployData[round][city] = parseFloat(val) || 0; updateArmyBar(round, currentMaxArmy); };
+window.updateDeploy = function (round, city, val) { currentDeployData[round][city] = parseFloat(val) || 0; updateArmyBar(round, currentMaxArmy, 'army-fill', 'army-count'); };
 window.onDapanInput = function (val) { document.getElementById('dapan-label').textContent = `总计 ${12 + (parseInt(val) || 0)} 兵`; };
-let currentMaxArmy = 12;
 
-function updateArmyBar(round, max) {
-  currentMaxArmy = max || 12;
+function updateArmyBar(round, max, fillId, countId) {
   const dd = currentDeployData[round] || Array(17).fill(0);
   const total = dd.slice(1).reduce((a, b) => a + b, 0);
-  document.getElementById('army-fill').style.width = Math.min(100, total / currentMaxArmy * 100) + '%';
-  const el = document.getElementById('army-count');
-  el.textContent = `${total} / ${currentMaxArmy}`;
-  el.className = 'army-count' + (total > currentMaxArmy ? ' army-warn' : '');
-}
-
-function usesLeft(d, key, maxTotal, maxDouble) {
-  const st = d.skillState || {};
-  const used = st[key + '_used'] || 0;
-  const usedD = st[key + '_usedDouble'] || 0;
-  if (used >= maxTotal) return 0;
-  if (d.round >= 5 && usedD >= maxDouble) return 0;
-  return maxTotal - used;
+  document.getElementById(fillId).style.width = Math.min(100, total / max * 100) + '%';
+  const el = document.getElementById(countId);
+  el.textContent = `${total} / ${max}`;
+  el.className = 'army-count' + (total > max ? ' army-warn' : '');
 }
 
 function buildSkillSections(d) {
+  hideAllSkillSections();
   const myDep = d.deploys && d.deploys[myId] || {};
   const round = d.round, isDouble = round >= 5;
+  const effects = d.skillEffects || {};
+  const yyEff = effects[`yuanyang_r${round}`];
+  const isYuanyangPartner = yyEff && (yyEff.target === myId || yyEff.player === myId);
+  // 鸳鸯鸡合作者不能用其他技能
+  if (isYuanyangPartner) return;
 
-  // 白斩鸡
-  const bz = document.getElementById('baizhan-section');
+  const cityOpts = () => Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
+  const playerOpts = (exclude) => allPlayers(d).filter(p => p.id !== exclude).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+  if (myRole?.id === 1 && !myDep.lazijiDone) {
+    document.getElementById('laziji-section').style.display = 'block';
+    document.getElementById('laziji-city').innerHTML = `<option value="">-- 不使用 --</option>` + cityOpts();
+  }
+  if (myRole?.id === 2 && round <= 4 && !myDep.zhajiDone) {
+    const left = usesLeft(d, 'zhaji', 1, 0);
+    if (left > 0) {
+      document.getElementById('zhaji-section').style.display = 'block';
+      document.getElementById('zhaji-uses').textContent = `前4轮限用1次`;
+      document.getElementById('zhaji-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts();
+    }
+  }
+  if (myRole?.id === 3 && !myDep.keleDone) {
+    const left = usesLeft(d, 'kele', 3, 1);
+    if (left > 0) {
+      document.getElementById('kele-section').style.display = 'block';
+      document.getElementById('kele-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      const opts = cityOpts();
+      document.getElementById('kele-city1').innerHTML = opts;
+      document.getElementById('kele-city2').innerHTML = opts;
+    }
+  }
+  if (myRole?.id === 4 && !myDep.nongjiDone) {
+    document.getElementById('nongji-section').style.display = 'block';
+    document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
+  }
+  if (myRole?.id === 5 && !myDep.zuozongDone) {
+    document.getElementById('zuozong-section').style.display = 'block';
+    document.getElementById('zuozong-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
+  }
+  if (myRole?.id === 6 && !myDep.huangmenDone) {
+    const left = usesLeft(d, 'huangmen', 3, 1);
+    if (left > 0) {
+      document.getElementById('huangmen-section').style.display = 'block';
+      document.getElementById('huangmen-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      document.getElementById('huangmen-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts();
+    }
+  }
+  if (myRole?.id === 7 && !myDep.yuanyangDone) {
+    const left = usesLeft(d, 'yuanyang', 3, 1);
+    if (left > 0) {
+      document.getElementById('yuanyang-section').style.display = 'block';
+      document.getElementById('yuanyang-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      document.getElementById('yuanyang-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
+    }
+  }
+  if (myRole?.id === 9 && !myDep.dapanDone) {
+    const left = usesLeft(d, 'dapan', 3, 1);
+    if (left > 0) {
+      document.getElementById('dapan-section').style.display = 'block';
+      document.getElementById('dapan-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+    }
+  }
   if (myRole?.id === 11 && !myDep.baizhanDone) {
-    bz.style.display = 'block';
-    const players = Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p }));
+    document.getElementById('baizhan-section').style.display = 'block';
+    const players = allPlayers(d);
     document.getElementById('baizhan-rank-inputs').innerHTML = players.map((_, i) =>
       `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:12px;color:var(--text3);width:40px">第${i + 1}名</span>
         <select id="bzp-${i}" style="flex:1"><option value="">-- 选 --</option>
           ${players.map(pp => `<option value="${pp.id}">${pp.name}</option>`).join('')}</select></div>`).join('');
-  } else bz.style.display = 'none';
-
-  // 可乐鸡翅
-  const kl = document.getElementById('kele-section');
-  const klLeft = usesLeft(d, 'kele', 3, 1);
-  if (myRole?.id === 3 && klLeft > 0 && !myDep.keleDone) {
-    kl.style.display = 'block';
-    document.getElementById('kele-uses').textContent = `剩余次数：${klLeft}${isDouble ? '（双倍轮限1次）' : ''}`;
-    const opts = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
-    document.getElementById('kele-city1').innerHTML = opts;
-    document.getElementById('kele-city2').innerHTML = opts;
-  } else kl.style.display = 'none';
-
-  // 黄焖鸡
-  const hm = document.getElementById('huangmen-section');
-  const hmLeft = usesLeft(d, 'huangmen', 3, 1);
-  if (myRole?.id === 6 && hmLeft > 0 && !myDep.huangmenDone) {
-    hm.style.display = 'block';
-    document.getElementById('huangmen-uses').textContent = `剩余次数：${hmLeft}${isDouble ? '（双倍轮限1次）' : ''}`;
-    document.getElementById('huangmen-city').innerHTML = `<option value="">-- 选择城池 --</option>` + Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
-  } else hm.style.display = 'none';
-
-  // 大盘鸡
-  const dp = document.getElementById('dapan-section');
-  const dpLeft = usesLeft(d, 'dapan', 3, 1);
-  if (myRole?.id === 9 && dpLeft > 0 && !myDep.dapanDone) {
-    dp.style.display = 'block';
-    document.getElementById('dapan-uses').textContent = `剩余次数：${dpLeft}${isDouble ? '（双倍轮限1次）' : ''}`;
-  } else dp.style.display = 'none';
+  }
 }
 
+// ── Skill submissions ──
 async function patchDeploy(patch) {
   const d = await dbGet(myRoom);
   if (!d.deploys) d.deploys = {};
@@ -551,16 +710,46 @@ async function patchDeploy(patch) {
   Object.assign(d.deploys[myId], patch);
   await dbSet(myRoom, d); return d;
 }
-
-window.submitBaizhan = async function () {
+async function patchEffect(key, val) {
   const d = await dbGet(myRoom);
-  const players = Object.entries(d.players || {}).map(([id]) => id);
-  const pred = players.map((_, i) => { const s = document.getElementById(`bzp-${i}`); return s ? s.value : ''; }).filter(Boolean);
-  if (new Set(pred).size !== pred.length) { toast('每个玩家只能选一次'); return; }
-  await patchDeploy({ baizhanPrediction: pred, baizhanDone: true });
-  document.getElementById('baizhan-section').style.display = 'none'; toast('预测已提交 ✓');
+  if (!d.skillEffects) d.skillEffects = {};
+  d.skillEffects[key] = val;
+  await dbSet(myRoom, d); return d;
+}
+async function incrementSkillUse(key, isDouble) {
+  const d = await dbGet(myRoom);
+  const st = d.skillState || {};
+  st[key + '_used'] = (st[key + '_used'] || 0) + 1;
+  if (isDouble) st[key + '_usedDouble'] = (st[key + '_usedDouble'] || 0) + 1;
+  d.skillState = st;
+  await dbSet(myRoom, d);
+}
+
+window.submitLaziji = async function () {
+  const city = parseInt(document.getElementById('laziji-city').value) || 0;
+  const d = await dbGet(myRoom);
+  if (city) d.skillEffects[`laziji_r${d.round}`] = { city, playerId: myId };
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].lazijiDone = true;
+  await dbSet(myRoom, d);
+  document.getElementById('laziji-section').style.display = 'none';
+  toast(city ? `辣子鸡丁技能已选 ${city}号城 ✓` : '本轮不使用辣子鸡丁');
 };
-window.skipBaizhan = async function () { await patchDeploy({ baizhanDone: true }); document.getElementById('baizhan-section').style.display = 'none'; };
+window.skipLaziji = async function () { await patchDeploy({ lazijiDone: true }); document.getElementById('laziji-section').style.display = 'none'; };
+
+window.submitZhaji = async function () {
+  const city = parseInt(document.getElementById('zhaji-city').value);
+  if (!city) { toast('请选择城池'); return; }
+  const d = await dbGet(myRoom);
+  d.skillEffects[`zhaji_r${d.round}`] = { city, playerId: myId };
+  d.skillState = d.skillState || {};
+  d.skillState.zhaji_used = (d.skillState.zhaji_used || 0) + 1;
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].zhajiDone = true;
+  await dbSet(myRoom, d);
+  document.getElementById('zhaji-section').style.display = 'none'; toast(`炸鸡已投放至 ${city}号城 ✓`);
+};
+window.skipZhaji = async function () { await patchDeploy({ zhajiDone: true }); document.getElementById('zhaji-section').style.display = 'none'; };
 
 window.submitKele = async function () {
   const c1 = parseInt(document.getElementById('kele-city1').value);
@@ -568,37 +757,61 @@ window.submitKele = async function () {
   if (!c1 || !c2 || c1 === c2) { toast('请选择两个不同的城池'); return; }
   if (Math.abs(c1 - c2) > 6) { toast('两城编号差值不能超过6'); return; }
   const d = await dbGet(myRoom);
+  d.skillEffects[`kele_r${d.round}`] = { c1, c2, playerId: myId };
   const st = d.skillState || {};
   st.kele_used = (st.kele_used || 0) + 1;
   if (d.round >= 5) st.kele_usedDouble = (st.kele_usedDouble || 0) + 1;
-  if (!d.skillEffects) d.skillEffects = {};
-  d.skillEffects[`kele_r${d.round}`] = { c1, c2, playerId: myId };
   d.skillState = st;
-  if (!d.deploys) d.deploys = {};
-  if (!d.deploys[myId]) d.deploys[myId] = {};
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].keleDone = true;
   await dbSet(myRoom, d);
   document.getElementById('kele-section').style.display = 'none'; toast(`已调换 ${c1}号 ↔ ${c2}号城 ✓`);
 };
 window.skipKele = async function () { await patchDeploy({ keleDone: true }); document.getElementById('kele-section').style.display = 'none'; };
 
+window.submitNongji = async function () {
+  const target = document.getElementById('nongji-target').value;
+  if (!target) { toast('请选择玩家'); return; }
+  const d = await dbGet(myRoom);
+  d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].nongjiDone = true;
+  await dbSet(myRoom, d);
+  document.getElementById('nongji-section').style.display = 'none'; toast('鸡汤慢炖：将在所有人提交后查看 ✓');
+};
+window.skipNongji = async function () { await patchDeploy({ nongjiDone: true }); document.getElementById('nongji-section').style.display = 'none'; };
+
 window.submitHuangmen = async function () {
   const city = parseInt(document.getElementById('huangmen-city').value);
-  if (!city) { toast('请选择一个城池'); return; }
+  if (!city) { toast('请选择城池'); return; }
   const d = await dbGet(myRoom);
+  d.skillEffects[`huangmen_r${d.round}`] = { city, playerId: myId };
   const st = d.skillState || {};
   st.huangmen_used = (st.huangmen_used || 0) + 1;
   if (d.round >= 5) st.huangmen_usedDouble = (st.huangmen_usedDouble || 0) + 1;
-  if (!d.skillEffects) d.skillEffects = {};
-  d.skillEffects[`huangmen_r${d.round}`] = { city, playerId: myId };
   d.skillState = st;
-  if (!d.deploys) d.deploys = {};
-  if (!d.deploys[myId]) d.deploys[myId] = {};
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].huangmenDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('huangmen-section').style.display = 'none'; toast(`已选择 ${city}号城 ✓`);
+  document.getElementById('huangmen-section').style.display = 'none'; toast(`已选 ${city}号城 ✓`);
 };
 window.skipHuangmen = async function () { await patchDeploy({ huangmenDone: true }); document.getElementById('huangmen-section').style.display = 'none'; };
+
+window.submitYuanyang = async function () {
+  const target = document.getElementById('yuanyang-target').value;
+  if (!target) { toast('请选择合作玩家'); return; }
+  const d = await dbGet(myRoom);
+  d.skillEffects[`yuanyang_r${d.round}`] = { player: myId, target };
+  const st = d.skillState || {};
+  st.yuanyang_used = (st.yuanyang_used || 0) + 1;
+  if (d.round >= 5) st.yuanyang_usedDouble = (st.yuanyang_usedDouble || 0) + 1;
+  d.skillState = st;
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].yuanyangDone = true;
+  await dbSet(myRoom, d);
+  document.getElementById('yuanyang-section').style.display = 'none'; toast(`已发起合作 ✓`);
+};
+window.skipYuanyang = async function () { await patchDeploy({ yuanyangDone: true }); document.getElementById('yuanyang-section').style.display = 'none'; };
 
 window.submitDapan = async function () {
   const extra = parseInt(document.getElementById('dapan-extra').value) || 0;
@@ -608,24 +821,48 @@ window.submitDapan = async function () {
   st.dapan_used = (st.dapan_used || 0) + 1;
   if (d.round >= 5) st.dapan_usedDouble = (st.dapan_usedDouble || 0) + 1;
   d.skillState = st;
-  if (!d.deploys) d.deploys = {};
-  if (!d.deploys[myId]) d.deploys[myId] = {};
-  d.deploys[myId].dapanExtra = extra;
-  d.deploys[myId].dapanDone = true;
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].dapanExtra = extra; d.deploys[myId].dapanDone = true;
   await dbSet(myRoom, d);
   document.getElementById('dapan-section').style.display = 'none';
   currentMaxArmy = 12 + extra;
-  updateArmyBar(d.round, currentMaxArmy);
-  toast(`已申请额外 ${extra} 个军队，总计 ${currentMaxArmy} 兵`);
+  updateArmyBar(d.round, currentMaxArmy, 'army-fill', 'army-count');
+  toast(`已申请额外 ${extra} 兵，总计 ${currentMaxArmy}`);
 };
 window.skipDapan = async function () { await patchDeploy({ dapanDone: true }); document.getElementById('dapan-section').style.display = 'none'; };
 
+window.submitZuozong = async function () {
+  const target = document.getElementById('zuozong-target').value;
+  if (!target) { toast('请选择目标玩家'); return; }
+  const d = await dbGet(myRoom);
+  d.skillEffects[`zuozong_r${d.round}`] = { target, playerId: myId };
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].zuozongDone = true;
+  await dbSet(myRoom, d);
+  document.getElementById('zuozong-section').style.display = 'none'; toast('左宗鸡技能已提交 ✓');
+};
+window.skipZuozong = async function () { await patchDeploy({ zuozongDone: true }); document.getElementById('zuozong-section').style.display = 'none'; };
+
+window.submitBaizhan = async function () {
+  const d = await dbGet(myRoom);
+  const players = allPlayers(d);
+  const pred = players.map((_, i) => { const s = document.getElementById(`bzp-${i}`); return s ? s.value : ''; }).filter(Boolean);
+  if (new Set(pred).size !== pred.length) { toast('每个玩家只能选一次'); return; }
+  await patchDeploy({ baizhanPrediction: pred, baizhanDone: true });
+  document.getElementById('baizhan-section').style.display = 'none'; toast('预测已提交 ✓');
+};
+window.skipBaizhan = async function () { await patchDeploy({ baizhanDone: true }); document.getElementById('baizhan-section').style.display = 'none'; };
+
+// ── Submit deploy ──
 window.submitDeploy = async function () {
   const d = await dbGet(myRoom);
   const round = d.round;
   const dd = currentDeployData[round] || Array(17).fill(0);
   const myDep = d.deploys && d.deploys[myId] || {};
-  const maxArmy = 12 + (myDep.dapanExtra || 0);
+  const effects = d.skillEffects || {};
+  const yyEff = effects[`yuanyang_r${round}`];
+  const isYY = yyEff && (yyEff.target === myId || yyEff.player === myId);
+  const maxArmy = isYY ? 17 : 12 + (myDep.dapanExtra || 0);
   const total = dd.slice(1).reduce((a, b) => a + b, 0);
   if (Math.abs(total - maxArmy) > 0.01) { toast(`军队总数必须=${maxArmy}（当前${total}）`); return; }
   if (!d.deploys) d.deploys = {};
@@ -634,14 +871,36 @@ window.submitDeploy = async function () {
   d.deploys[myId].troops = dd.slice(1);
   await dbSet(myRoom, d);
   toast('提交成功！');
-  if (isHost) {
-    const allDone = Object.keys(d.players || {}).every(pid => d.deploys[pid]?.submitted);
-    if (allDone && Object.keys(d.players).length >= 2) calcResult(d);
-  }
+  // check if all done → move to nongji/jiangyou/result
+  checkAfterSubmit(d);
 };
 
+async function checkAfterSubmit(d) {
+  const fresh = await dbGet(myRoom);
+  if (fresh.phase !== 'deploy') return;
+  const players = Object.keys(fresh.players || {});
+  const deps = fresh.deploys || {};
+  const allSubmitted = players.every(pid => deps[pid]?.submitted);
+  if (!allSubmitted) return;
+  // check nongji
+  const nongjiEff = fresh.skillEffects && fresh.skillEffects[`nongji_r${fresh.round}`];
+  if (nongjiEff && nongjiEff.target) {
+    fresh.phase = 'nongji_peek';
+    await dbSet(myRoom, fresh); return;
+  }
+  // check jiangyou
+  const jyEff = fresh.skillEffects && fresh.skillEffects[`jiangyou_r${fresh.round}`];
+  const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
+  const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
+  if (jyPlayer && jyLeft > 0 && !(fresh.deploys[jyPlayer.id]?.jiangyouDone)) {
+    fresh.phase = 'jiangyou_move';
+    await dbSet(myRoom, fresh); return;
+  }
+  calcResult(fresh);
+}
+
 function renderWaiting(d) {
-  const players = Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p }));
+  const players = allPlayers(d);
   const deps = d.deploys || {};
   document.getElementById('waiting-list').innerHTML = players.map(p => {
     const done = deps[p.id]?.submitted, isMe = p.id === myId;
@@ -651,27 +910,222 @@ function renderWaiting(d) {
   }).join('');
 }
 
-async function calcResult(data) {
-  const round = data.round, isDouble = round >= 5;
-  const players = Object.entries(data.players).map(([id, p]) => ({ id, ...p }));
-  const deploys = data.deploys || {};
-  const effects = data.skillEffects || {};
+// ── Nongji peek phase ──
+function renderNongjiPeek(d) {
+  showScreen('deploy');
+  document.getElementById('deploy-form').style.display = 'none';
+  hideAllSkillSections();
+  document.getElementById('submitted-overlay').style.display = 'none';
+  document.getElementById('jiangyou-phase').style.display = 'none';
+  const nongjiPeek = document.getElementById('nongji-peek-phase');
+  nongjiPeek.style.display = 'block';
 
-  // 可乐鸡翅：城池价值映射
+  const eff = d.skillEffects[`nongji_r${d.round}`];
+  const isNongjiPlayer = eff.playerId === myId;
+  const desc = document.getElementById('nongji-peek-desc');
+
+  if (isNongjiPlayer) {
+    const target = d.players[eff.target];
+    const targetDep = d.deploys[eff.target];
+    desc.textContent = `你查看了 ${target?.name} 的部署，现在可以决定是否重新部署。`;
+    document.getElementById('nongji-peek-content').innerHTML = `
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title">${target?.name} 的部署</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          ${Array.from({ length: 16 }, (_, i) => {
+            const t = targetDep?.troops?.[i] || 0;
+            return `<div style="text-align:center;padding:6px 4px;background:var(--bg3);border-radius:6px;font-size:13px">
+              <div style="font-size:10px;color:var(--text3)">${i + 1}号</div>
+              <div style="color:${t > 0 ? 'var(--gold)' : 'var(--text3)'}">${t}</div></div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    document.getElementById('nongji-redeploy-form').style.display = 'block';
+    nongjiRedeployData = [...(currentDeployData[d.round] || Array(17).fill(0))];
+    buildNongjiRedeployGrid(d.round);
+  } else {
+    desc.textContent = `浓鸡汤玩家正在查看情报并重新部署，请稍候…`;
+    document.getElementById('nongji-peek-content').innerHTML = '';
+    document.getElementById('nongji-redeploy-form').style.display = 'none';
+    // check if nongji done
+    if (d.deploys[eff.playerId]?.nongjiRedeployDone) {
+      checkAfterNongji(d);
+    }
+  }
+}
+
+function buildNongjiRedeployGrid(round) {
+  const isDouble = round >= 5;
+  const grid = document.getElementById('city-grid2'); grid.innerHTML = '';
+  for (let c = 1; c <= 16; c++) {
+    const cell = document.createElement('div'); cell.className = 'city-cell';
+    cell.innerHTML = `<div class="city-num">${c}号${isDouble ? '<div class="city-double">×2</div>' : ''}</div>
+      <input type="number" min="0" max="12" step="1" value="${nongjiRedeployData[c] || ''}" placeholder="0" oninput="updateNongjiDeploy(${c},this.value)" />`;
+    grid.appendChild(cell);
+  }
+  updateNongjiBar(round);
+}
+window.updateNongjiDeploy = function (city, val) { nongjiRedeployData[city] = parseFloat(val) || 0; updateNongjiBar(); };
+function updateNongjiBar() {
+  const total = nongjiRedeployData.slice(1).reduce((a, b) => a + b, 0);
+  document.getElementById('army-fill2').style.width = Math.min(100, total / 12 * 100) + '%';
+  const el = document.getElementById('army-count2');
+  el.textContent = `${total} / 12`;
+  el.className = 'army-count' + (total > 12 ? ' army-warn' : '');
+}
+
+window.submitNongjiRedeploy = async function () {
+  const total = nongjiRedeployData.slice(1).reduce((a, b) => a + b, 0);
+  if (Math.abs(total - 12) > 0.01) { toast(`军队总数必须=12（当前${total}）`); return; }
+  const d = await dbGet(myRoom);
+  d.deploys[myId].troops = nongjiRedeployData.slice(1);
+  d.deploys[myId].nongjiRedeployDone = true;
+  await dbSet(myRoom, d); toast('重新部署完成 ✓');
+  checkAfterNongji(d);
+};
+window.skipNongjiRedeploy = async function () {
+  const d = await dbGet(myRoom);
+  d.deploys[myId].nongjiRedeployDone = true;
+  await dbSet(myRoom, d); toast('保持原部署');
+  checkAfterNongji(d);
+};
+
+async function checkAfterNongji(d) {
+  const fresh = await dbGet(myRoom);
+  if (fresh.phase !== 'nongji_peek') return;
+  const eff = fresh.skillEffects[`nongji_r${fresh.round}`];
+  if (!fresh.deploys[eff.playerId]?.nongjiRedeployDone) return;
+  // move to jiangyou or result
+  const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
+  const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
+  if (jyPlayer && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
+    fresh.phase = 'jiangyou_move';
+    await dbSet(myRoom, fresh); return;
+  }
+  calcResult(fresh);
+}
+
+// ── Jiangyou phase ──
+function renderJiangyouPhase(d) {
+  showScreen('deploy');
+  document.getElementById('deploy-form').style.display = 'none';
+  hideAllSkillSections();
+  document.getElementById('submitted-overlay').style.display = 'none';
+  document.getElementById('nongji-peek-phase').style.display = 'none';
+  const jyPhase = document.getElementById('jiangyou-phase');
+  jyPhase.style.display = 'block';
+
+  const jyPlayer = allPlayers(d).find(p => p.roleId === 10);
+  const isJYPlayer = jyPlayer && jyPlayer.id === myId;
+  const desc = document.getElementById('jiangyou-desc');
+
+  if (isJYPlayer) {
+    desc.textContent = '现在可以移动你的1枚军队到另一个城池（计分前生效）。';
+    document.getElementById('jiangyou-form').style.display = 'block';
+    const myTroops = d.deploys[myId]?.troops || Array(16).fill(0);
+    const fromOpts = myTroops.map((t, i) => t > 0 ? `<option value="${i + 1}">${i + 1}号城（${t}兵）</option>` : '').filter(Boolean).join('');
+    document.getElementById('jy-from').innerHTML = fromOpts || '<option>无可移动的兵</option>';
+    document.getElementById('jy-to').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
+  } else {
+    desc.textContent = `酱油鸡玩家正在移动军队，请稍候…`;
+    document.getElementById('jiangyou-form').style.display = 'none';
+    if (d.deploys[jyPlayer?.id]?.jiangyouDone) calcResult(d);
+  }
+}
+
+window.submitJiangyou = async function () {
+  const from = parseInt(document.getElementById('jy-from').value);
+  const to = parseInt(document.getElementById('jy-to').value);
+  if (!from || !to || from === to) { toast('请选择不同的城池'); return; }
+  const d = await dbGet(myRoom);
+  const troops = [...(d.deploys[myId]?.troops || Array(16).fill(0))];
+  if (troops[from - 1] <= 0) { toast('该城池没有军队'); return; }
+  troops[from - 1] -= 1;
+  troops[to - 1] += 1;
+  const st = d.skillState || {};
+  st.jiangyou_used = (st.jiangyou_used || 0) + 1;
+  if (d.round >= 5) st.jiangyou_usedDouble = (st.jiangyou_usedDouble || 0) + 1;
+  d.skillState = st;
+  d.deploys[myId].troops = troops;
+  d.deploys[myId].jiangyouDone = true;
+  await dbSet(myRoom, d); toast(`已从 ${from}号城 移1兵至 ${to}号城 ✓`);
+  calcResult(d);
+};
+window.skipJiangyou = async function () {
+  const d = await dbGet(myRoom);
+  d.deploys[myId].jiangyouDone = true;
+  await dbSet(myRoom, d);
+  calcResult(d);
+};
+
+// ── Calc result ──
+async function calcResult(data) {
+  const fresh = await dbGet(myRoom);
+  if (fresh.phase === 'result' || fresh.phase === 'final') return; // already calculated
+
+  const round = fresh.round, isDouble = round >= 5;
+  const players = allPlayers(fresh);
+  const deploys = fresh.deploys || {};
+  const effects = fresh.skillEffects || {};
+
+  // 可乐鸡翅城池价值映射
   const cityVal = {};
   for (let c = 1; c <= 16; c++) cityVal[c] = c;
   const keleSwap = effects[`kele_r${round}`];
   if (keleSwap) { cityVal[keleSwap.c1] = keleSwap.c2; cityVal[keleSwap.c2] = keleSwap.c1; }
 
+  // 炸鸡桶
+  const zhajiEff = effects[`zhaji_r${round}`];
+  const zhajiCity = zhajiEff?.city || null;
+
+  // 辣子鸡丁
+  const lazijiEff = effects[`laziji_r${round}`];
+  const lazijiCity = lazijiEff?.city || null;
+
   // 黄焖鸡
   const hmEff = effects[`huangmen_r${round}`];
-  const hmCity = hmEff ? hmEff.city : null;
+  const hmCity = hmEff?.city || null;
+
+  // 鸳鸯鸡
+  const yyEff = effects[`yuanyang_r${round}`];
+
+  // 实际兵力（处理辣子鸡-3 和 鸳鸯鸡同城归0）
+  const effectiveTroops = {};
+  players.forEach(p => { effectiveTroops[p.id] = [...(deploys[p.id]?.troops || Array(16).fill(0))]; });
+
+  // 辣子鸡-3
+  if (lazijiCity) {
+    players.forEach(p => {
+      if (p.id !== lazijiEff.playerId) {
+        effectiveTroops[p.id][lazijiCity - 1] = Math.max(0, effectiveTroops[p.id][lazijiCity - 1] - 3);
+      }
+    });
+  }
+
+  // 鸳鸯鸡同城合计>12归0
+  if (yyEff) {
+    const p1 = yyEff.player, p2 = yyEff.target;
+    for (let c = 0; c < 16; c++) {
+      const sum = (effectiveTroops[p1]?.[c] || 0) + (effectiveTroops[p2]?.[c] || 0);
+      if (sum > 12) { effectiveTroops[p1][c] = 0; effectiveTroops[p2][c] = 0; }
+    }
+  }
+
+  // 炸鸡桶：摧毁目标城所有兵，炸鸡桶玩家获得等同兵数的分
+  const zhajiBonus = {};
+  players.forEach(p => { zhajiBonus[p.id] = 0; });
+  if (zhajiCity) {
+    let totalDestroyed = 0;
+    players.forEach(p => { totalDestroyed += effectiveTroops[p.id][zhajiCity - 1] || 0; effectiveTroops[p.id][zhajiCity - 1] = 0; });
+    zhajiBonus[zhajiEff.playerId] = totalDestroyed;
+  }
 
   // 每城胜负
   const cityWinners = {};
   for (let c = 1; c <= 16; c++) {
+    if (c === zhajiCity) { cityWinners[c] = { winner: null, max: 0, troops: {}, bombed: true }; continue; }
     const troops = {};
-    players.forEach(p => { troops[p.id] = deploys[p.id]?.troops?.[c - 1] || 0; });
+    players.forEach(p => { troops[p.id] = effectiveTroops[p.id][c - 1] || 0; });
     const max = Math.max(...Object.values(troops));
     if (max === 0) { cityWinners[c] = { winner: null, max: 0, troops }; continue; }
     const winners = players.filter(p => troops[p.id] === max);
@@ -683,23 +1137,46 @@ async function calcResult(data) {
   players.forEach(p => { roundScores[p.id] = 0; });
   const cityWon = {};
   players.forEach(p => { cityWon[p.id] = new Set(); });
+
   for (let c = 1; c <= 16; c++) {
     const w = cityWinners[c].winner;
     if (w) { roundScores[w] += isDouble ? cityVal[c] * 2 : cityVal[c]; cityWon[w].add(c); }
   }
 
+  // 炸鸡桶加分
+  players.forEach(p => { roundScores[p.id] += zhajiBonus[p.id]; });
+
+  // 鸳鸯鸡收益平分
+  if (yyEff) {
+    const p1 = yyEff.player, p2 = yyEff.target;
+    const total = (roundScores[p1] || 0) + (roundScores[p2] || 0);
+    const each = total / 2;
+    roundScores[p1] = each; roundScores[p2] = each;
+  }
+
   const skillLog = [];
 
-  // 黄焖鸡效果
+  if (lazijiCity) skillLog.push(`辣子鸡丁：${fresh.players[lazijiEff.playerId]?.name} 在 ${lazijiCity}号城 发动火辣袭击，其他玩家该城-3兵`);
+  if (zhajiCity) {
+    const destroyed = Object.values(deploys).reduce((s, dep) => s + (dep?.troops?.[zhajiCity - 1] || 0), 0);
+    skillLog.push(`炸鸡桶：${fresh.players[zhajiEff.playerId]?.name} 在 ${zhajiCity}号城 投炸鸡，摧毁 ${destroyed} 兵，获 ${destroyed} 分`);
+  }
+  if (yyEff) {
+    const p1n = fresh.players[yyEff.player]?.name, p2n = fresh.players[yyEff.target]?.name;
+    skillLog.push(`鸳鸯鸡：${p1n} 与 ${p2n} 合作，收益平分`);
+  }
+  if (keleSwap) skillLog.push(`可乐鸡翅：${fresh.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
+
+  // 黄焖鸡
   if (hmCity !== null) {
     const baseVal = cityVal[hmCity];
     const penalty = isDouble ? baseVal * 2 : baseVal;
     const winner = cityWinners[hmCity]?.winner;
     if (winner) {
-      roundScores[winner] += isDouble ? baseVal * 2 : baseVal; // 额外一倍
-      skillLog.push(`黄焖鸡：${data.players[hmEff.playerId]?.name} 选 ${hmCity}号城，${data.players[winner]?.name} 获得双倍分`);
+      roundScores[winner] += isDouble ? baseVal * 2 : baseVal;
+      skillLog.push(`黄焖鸡米饭：${fresh.players[hmEff.playerId]?.name} 选 ${hmCity}号城，${fresh.players[winner]?.name} 获双倍分`);
     } else {
-      skillLog.push(`黄焖鸡：${data.players[hmEff.playerId]?.name} 选 ${hmCity}号城（流局）`);
+      skillLog.push(`黄焖鸡米饭：${fresh.players[hmEff.playerId]?.name} 选 ${hmCity}号城（流局）`);
     }
     players.forEach(p => {
       if (!cityWon[p.id].has(hmCity)) {
@@ -709,44 +1186,69 @@ async function calcResult(data) {
     });
   }
 
-  // 可乐鸡翅 log
-  if (keleSwap) {
-    skillLog.push(`可乐鸡翅：${data.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
-  }
-
   // 大盘鸡扣分
   players.forEach(p => {
     if (p.roleId !== 9) return;
-    const extra = deploys[p.id]?.dapanExtra || 0;
-    if (!extra) return;
-    const troops = deploys[p.id]?.troops || [];
+    const extra = deploys[p.id]?.dapanExtra || 0; if (!extra) return;
+    const troops = effectiveTroops[p.id] || [];
     let wasted = 0;
     troops.forEach((t, i) => { if (!cityWon[p.id].has(i + 1)) wasted += t; });
     const penalty = wasted * 2;
     if (penalty > 0) { roundScores[p.id] -= penalty; skillLog.push(`大盘鸡：${p.name} 未得分兵 ${wasted} 个，扣 ${penalty} 分`); }
   });
 
-  // 累计分
-  const totalScores = {};
-  players.forEach(p => { totalScores[p.id] = (data.totalScores?.[p.id] || 0) + roundScores[p.id]; });
+  // 基础+技能结算后的累计（用于白斩/左宗判断）
+  const baseTotal = {};
+  players.forEach(p => { baseTotal[p.id] = (fresh.totalScores?.[p.id] || 0) + roundScores[p.id]; });
 
-  // 白斩鸡
+  // 泡椒鸡爪：本轮累计唯一最低偷所有人2分
+  const paojiaoPlayer = players.find(p => p.roleId === 8);
+  if (paojiaoPlayer) {
+    const minScore = Math.min(...players.map(p => baseTotal[p.id]));
+    const minPlayers = players.filter(p => baseTotal[p.id] === minScore);
+    if (minPlayers.length === 1 && minPlayers[0].id === paojiaoPlayer.id) {
+      players.forEach(p => { if (p.id !== paojiaoPlayer.id) { baseTotal[p.id] -= 2; roundScores[p.id] -= 2; baseTotal[paojiaoPlayer.id] += 2; roundScores[paojiaoPlayer.id] += 2; } });
+      skillLog.push(`泡椒鸡爪：${paojiaoPlayer.name} 为本轮累计唯一最低，偷所有人各2分`);
+    }
+  }
+
+  // 白斩鸡（基于baseTotal排名）
   let baizhanDetail = null;
   const bzP = players.find(p => p.roleId === 11);
   if (bzP) {
     const pred = deploys[bzP.id]?.baizhanPrediction || [];
-    const actualRanked = [...players].sort((a, b) => (totalScores[b.id] || 0) - (totalScores[a.id] || 0)).map(p => p.id);
-    let correct = 0;
-    pred.forEach((pid, i) => { if (actualRanked[i] === pid) correct++; });
+    const actualRanked = [...players].sort((a, b) => (baseTotal[b.id] || 0) - (baseTotal[a.id] || 0)).map(p => p.id);
+    let correct = 0; pred.forEach((pid, i) => { if (actualRanked[i] === pid) correct++; });
     const bonus = correct * 2;
-    totalScores[bzP.id] += bonus;
     baizhanDetail = { playerId: bzP.id, predicted: pred, actual: actualRanked, correct, bonus };
     if (bonus > 0) skillLog.push(`白斩鸡拼盘：${bzP.name} 猜对 ${correct} 人，+${bonus} 分`);
-    else skillLog.push(`白斩鸡拼盘：${bzP.name} 本轮未猜中`);
   }
 
+  // 左宗鸡（基于baseTotal）
+  let zuozongDetail = null;
+  const zzEff = effects[`zuozong_r${round}`];
+  if (zzEff) {
+    const zzPlayer = fresh.players[zzEff.playerId];
+    const target = fresh.players[zzEff.target];
+    const sorted = [...players].sort((a, b) => (baseTotal[b.id] || 0) - (baseTotal[a.id] || 0));
+    const targetRank = sorted.findIndex(p => p.id === zzEff.target);
+    const isBottom3 = targetRank >= sorted.length - 3;
+    zuozongDetail = { playerId: zzEff.playerId, target: zzEff.target, isBottom3 };
+    if (isBottom3) skillLog.push(`左宗鸡：${zzPlayer?.name} 选 ${target?.name}，${target?.name} 在最低三名，${zzPlayer?.name} +10分`);
+    else skillLog.push(`左宗鸡：${zzPlayer?.name} 选 ${target?.name}，${target?.name} 不在最低三名，无加分`);
+  }
+
+  // 最终totalScores（baseTotal + 白斩 + 左宗，互不干扰）
+  const totalScores = { ...baseTotal };
+  if (baizhanDetail && baizhanDetail.bonus > 0) totalScores[baizhanDetail.playerId] += baizhanDetail.bonus;
+  if (zuozongDetail && zuozongDetail.isBottom3) totalScores[zuozongDetail.playerId] += 10;
+
+  // roundScores也加上白斩/左宗（用于显示）
+  if (baizhanDetail && baizhanDetail.bonus > 0) roundScores[baizhanDetail.playerId] += baizhanDetail.bonus;
+  if (zuozongDetail && zuozongDetail.isBottom3) roundScores[zuozongDetail.playerId] += 10;
+
   await dbSet(myRoom, {
-    ...data,
+    ...fresh,
     phase: round >= 6 ? 'final' : 'result',
     lastRound: round,
     cityWinners,
@@ -754,43 +1256,46 @@ async function calcResult(data) {
     roundScores,
     totalScores,
     baizhanDetail: baizhanDetail || null,
+    zuozongDetail: zuozongDetail || null,
     skillLog,
     deploys: {}
   });
 }
 
+// ── Render result ──
 function renderResult(d) {
   showScreen('result');
   const round = d.lastRound, isDouble = round >= 5;
   document.getElementById('result-round-label').textContent = `第${round}轮${isDouble ? ' · 双倍' : ''} 结算`;
   document.getElementById('result-round-badge').textContent = `${round}/6`;
 
-  const players = Object.entries(d.players).map(([id, p]) => ({ id, ...p }));
+  const players = allPlayers(d);
   const cw = d.cityWinners || {}, rs = d.roundScores || {}, ts = d.totalScores || {};
   const cv = d.cityValMap || {};
-  const hmEff = (d.skillEffects || {})[`huangmen_r${round}`];
-  const hmCity = hmEff?.city || null;
-  const keleSwap = (d.skillEffects || {})[`kele_r${round}`];
+  const effects = d.skillEffects || {};
+  const hmEff = effects[`huangmen_r${round}`];
+  const keleSwap = effects[`kele_r${round}`];
+  const zhajiEff = effects[`zhaji_r${round}`];
 
-  // 城池
   const grid = document.getElementById('city-result-grid'); grid.innerHTML = '';
   for (let c = 1; c <= 16; c++) {
-    const isHM = c === hmCity;
+    const isHM = c === hmEff?.city;
+    const isBombed = c === zhajiEff?.city;
     const winner = cw[c]?.winner;
     const baseVal = cv[c] || c;
     const pts = isDouble ? baseVal * 2 : baseVal;
     const cell = document.createElement('div');
-    cell.className = 'city-result-cell' + (winner ? ' won' : '') + (isHM ? ' huangmen-cell' : '');
+    cell.className = 'city-result-cell' + (winner ? ' won' : '') + (isHM ? ' hm' : '');
     let html = `<div class="city-pts">${c}号`;
     if (keleSwap && (c === keleSwap.c1 || c === keleSwap.c2)) html += ` <span style="color:var(--gold);font-size:9px">↔${baseVal}</span>`;
     html += ` +${pts}</div>`;
-    if (winner) { const p = players.find(p => p.id === winner); html += `<div class="city-winner">${p ? p.name : '?'}</div>`; }
+    if (isBombed) html += `<div class="city-tie">💥炸了</div>`;
+    else if (winner) { const p = players.find(p => p.id === winner); html += `<div class="city-winner">${p ? p.name : '?'}</div>`; }
     else html += `<div class="city-tie">流局</div>`;
-    if (isHM) html += `<div class="city-skill-tag">黄焖鸡</div>`;
+    if (isHM) html += `<div class="city-tag">黄焖鸡</div>`;
     cell.innerHTML = html; grid.appendChild(cell);
   }
 
-  // 得分
   const sorted = players.map(p => ({ ...p, r: rs[p.id] || 0, t: ts[p.id] || 0 })).sort((a, b) => b.r - a.r);
   document.getElementById('round-scores').innerHTML = sorted.map((p, i) => {
     const cls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
@@ -803,28 +1308,23 @@ function renderResult(d) {
         <div class="score-delta">累计 ${p.t}</div></div></div>`;
   }).join('');
 
-  // 技能日志
   const log = d.skillLog || [];
   const logCard = document.getElementById('skill-log-card');
   if (log.length) { logCard.style.display = 'block'; document.getElementById('skill-log-content').innerHTML = log.map(l => `<div style="font-size:12px;color:var(--text2);padding:3px 0;line-height:1.5">${l}</div>`).join(''); }
   else logCard.style.display = 'none';
 
-  // 调分（主持人，仅左宗鸡/白斩鸡）
   if (isHost) {
     document.getElementById('host-next-btn').style.display = round < 6 ? 'block' : 'none';
     document.getElementById('game-over-btn').style.display = round >= 6 ? 'block' : 'none';
-    const manual = players.filter(p => p.roleId === 5 || p.roleId === 11);
-    if (manual.length) {
-      document.getElementById('host-adjust-card').style.display = 'block';
-      document.getElementById('host-adjust-list').innerHTML = manual.map(p => {
-        const role = ROLES.find(r => r.id === p.roleId);
-        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <div class="avatar" style="background:${p.color}22;color:${p.color};width:28px;height:28px;font-size:11px;flex-shrink:0">${p.name.slice(0, 2)}</div>
-          <div style="flex:1"><div style="font-size:13px">${p.name}</div><div style="font-size:11px;color:var(--text3)">${role?.name}</div></div>
-          <span style="font-size:12px;color:var(--text3)">累计 ${ts[p.id] || 0}</span>
-          <input type="number" id="adj-${p.id}" placeholder="±0" style="width:70px" /></div>`;
-      }).join('');
-    } else document.getElementById('host-adjust-card').style.display = 'none';
+    document.getElementById('host-adjust-card').style.display = 'block';
+    document.getElementById('host-adjust-list').innerHTML = players.map(p => {
+      const role = ROLES.find(r => r.id === p.roleId);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div class="avatar" style="background:${p.color}22;color:${p.color};width:28px;height:28px;font-size:11px;flex-shrink:0">${p.name.slice(0, 2)}</div>
+        <div style="flex:1"><div style="font-size:13px">${p.name}</div><div style="font-size:11px;color:var(--text3)">${role?.name}</div></div>
+        <span style="font-size:12px;color:var(--text3)">累计 ${ts[p.id] || 0}</span>
+        <input type="number" id="adj-${p.id}" placeholder="±0" style="width:70px" /></div>`;
+    }).join('');
   } else {
     document.getElementById('host-adjust-card').style.display = 'none';
     document.getElementById('host-next-btn').style.display = 'none';
@@ -835,15 +1335,14 @@ function renderResult(d) {
 window.applyAdjustments = async function () {
   const d = await dbGet(myRoom);
   const ts = { ...d.totalScores || {} }; let changed = false;
-  Object.entries(d.players || {}).forEach(([pid, p]) => {
-    if (p.roleId !== 5 && p.roleId !== 11) return;
-    const inp = document.getElementById(`adj-${pid}`); if (!inp) return;
+  allPlayers(d).forEach(p => {
+    const inp = document.getElementById(`adj-${p.id}`); if (!inp) return;
     const val = parseFloat(inp.value) || 0;
-    if (val !== 0) { ts[pid] = (ts[pid] || 0) + val; changed = true; }
+    if (val !== 0) { ts[p.id] = (ts[p.id] || 0) + val; changed = true; }
   });
   if (!changed) { toast('没有填写调整分数'); return; }
   d.totalScores = ts; await dbSet(myRoom, d);
-  Object.keys(d.players || {}).forEach(pid => { const inp = document.getElementById(`adj-${pid}`); if (inp) inp.value = ''; });
+  allPlayers(d).forEach(p => { const inp = document.getElementById(`adj-${p.id}`); if (inp) inp.value = ''; });
   toast('调分已保存 ✓');
 };
 
@@ -852,13 +1351,11 @@ window.nextRound = async function () {
   d.round = d.lastRound + 1; d.phase = 'deploy'; d.deploys = {};
   await dbSet(myRoom, d);
 };
-window.showFinal = async function () {
-  const d = await dbGet(myRoom); d.phase = 'final'; await dbSet(myRoom, d);
-};
+window.showFinal = async function () { const d = await dbGet(myRoom); d.phase = 'final'; await dbSet(myRoom, d); };
 
 function renderFinal(d) {
   showScreen('final');
-  const players = Object.entries(d.players).map(([id, p]) => ({ id, ...p }));
+  const players = allPlayers(d);
   const ts = d.totalScores || {};
   const sorted = players.map(p => ({ ...p, total: ts[p.id] || 0 })).sort((a, b) => b.total - a.total);
   document.getElementById('final-scores').innerHTML = sorted.map((p, i) => {
