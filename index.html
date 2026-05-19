@@ -867,17 +867,23 @@ window.submitDeploy = async function () {
   d.deploys[myId].troops = dd.slice(1);
   await dbSet(myRoom, d);
   toast('提交成功！');
-  // check if all done → move to nongji/jiangyou/result
   checkAfterSubmit(d);
 };
 
-async function checkAfterSubmit(d) {
+async function checkAfterSubmit(oldData) {
   const fresh = await dbGet(myRoom);
   if (fresh.phase !== 'deploy') return;
   const players = Object.keys(fresh.players || {});
   const deps = fresh.deploys || {};
   const allSubmitted = players.every(pid => deps[pid]?.submitted);
   if (!allSubmitted) return;
+
+  // 抢占式加锁：只有第一个抢到的客户端执行结算
+  const locked = { ...fresh, phase: 'calculating' };
+  await dbSet(myRoom, locked);
+  const verify = await dbGet(myRoom);
+  if (verify.phase !== 'calculating') return; // 被别人抢先了
+
   // check nongji
   const nongjiEff = fresh.skillEffects && fresh.skillEffects[`nongji_r${fresh.round}`];
   if (nongjiEff && nongjiEff.target) {
@@ -885,10 +891,9 @@ async function checkAfterSubmit(d) {
     await dbSet(myRoom, fresh); return;
   }
   // check jiangyou
-  const jyEff = fresh.skillEffects && fresh.skillEffects[`jiangyou_r${fresh.round}`];
   const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
   const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
-  if (jyPlayer && jyLeft > 0 && !(fresh.deploys[jyPlayer.id]?.jiangyouDone)) {
+  if (jyPlayer && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
     fresh.phase = 'jiangyou_move';
     await dbSet(myRoom, fresh); return;
   }
@@ -1057,7 +1062,7 @@ window.skipJiangyou = async function () {
 // ── Calc result ──
 async function calcResult(data) {
   const fresh = await dbGet(myRoom);
-  if (fresh.phase === 'result' || fresh.phase === 'final') return; // already calculated
+  if (fresh.phase === 'result' || fresh.phase === 'final' || fresh.phase === 'calculating') return;
 
   const round = fresh.round, isDouble = round >= 5;
   const players = allPlayers(fresh);
@@ -1304,14 +1309,17 @@ function renderResult(d) {
     const winner = cw[c]?.winner;
     const baseVal = cv[c] || c;
     const pts = isDouble ? baseVal * 2 : baseVal;
-    const cell = document.createElement('div');
-    cell.className = 'city-result-cell' + (winner ? ' won' : '') + (isHM ? ' hm' : '');
+    const winnerPlayer = winner ? players.find(p => p.id === winner) : null;
+    const borderColor = winnerPlayer ? winnerPlayer.color : 'var(--border)';
+    cell.className = 'city-result-cell' + (isHM ? ' hm' : '');
+    if (winnerPlayer) cell.style.borderColor = winnerPlayer.color;
+    if (winnerPlayer) cell.style.background = winnerPlayer.color + '11';
     cell.style.cursor = 'pointer';
     let html = `<div class="city-pts">${c}号`;
     if (keleSwap && (c === keleSwap.c1 || c === keleSwap.c2)) html += ` <span style="color:var(--gold);font-size:9px">↔${baseVal}</span>`;
     html += ` +${pts}</div>`;
     if (isBombed) html += `<div class="city-tie">💥炸了</div>`;
-    else if (winner) { const p = players.find(p => p.id === winner); html += `<div class="city-winner">${p ? p.name : '?'}</div>`; }
+    else if (winner) { const p = players.find(p => p.id === winner); html += `<div class="city-winner" style="color:${p ? p.color : 'var(--gold)'}">${p ? p.name : '?'}</div>`; }
     else html += `<div class="city-tie">流局</div>`;
     if (isHM) html += `<div class="city-tag">黄焖鸡</div>`;
     // troop detail popup on click
@@ -1320,7 +1328,7 @@ function renderResult(d) {
       .sort((a, b) => b.t - a.t)
       .map(p => `<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0">
         <span style="color:${p.color}">${p.name}</span>
-        <span style="color:${p.t > 0 ? 'var(--text)' : 'var(--text3)'}">${p.t}</span></div>`).join('');
+        <span style="color:${p.t > 0 ? p.color : 'var(--text3)'};font-weight:${p.t > 0 ? '500' : '300'}">${p.t}</span></div>`).join('');
     html += `<div class="city-troop-detail" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;font-size:11px">${troopLines}</div>`;
     cell.innerHTML = html;
     grid.appendChild(cell);
@@ -1328,13 +1336,11 @@ function renderResult(d) {
 
   const sorted = players.map(p => ({ ...p, r: rs[p.id] || 0, t: ts[p.id] || 0 })).sort((a, b) => b.r - a.r);
   document.getElementById('round-scores').innerHTML = sorted.map((p, i) => {
-    const cls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
     return `<div class="score-row">
-      <div class="score-rank ${cls}">${i + 1}</div>
-      <div class="avatar" style="background:${p.color}22;color:${p.color};width:30px;height:30px;font-size:12px">${p.name.slice(0, 2)}</div>
+      <div class="avatar" style="background:${p.color}22;color:${p.color};width:30px;height:30px;font-size:12px;flex-shrink:0">${p.name.slice(0, 2)}</div>
       <div class="player-info"><div class="player-name">${p.name}</div></div>
       <div style="text-align:right">
-        <div class="score-pts" style="font-size:18px">${p.r >= 0 ? '+' : ''}${p.r}</div>
+        <div style="font-size:18px;font-weight:600;color:${p.color}">${p.r >= 0 ? '+' : ''}${p.r}</div>
         <div class="score-delta">累计 ${p.t}</div></div></div>`;
   }).join('');
 
@@ -1389,13 +1395,11 @@ function renderFinal(d) {
   const ts = d.totalScores || {};
   const sorted = players.map(p => ({ ...p, total: ts[p.id] || 0 })).sort((a, b) => b.total - a.total);
   document.getElementById('final-scores').innerHTML = sorted.map((p, i) => {
-    const cls = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
     const role = ROLES.find(r => r.id === p.roleId);
     return `<div class="score-row">
-      <div class="score-rank ${cls}">${i + 1}</div>
       <div class="avatar" style="background:${p.color}22;color:${p.color}">${p.name.slice(0, 2)}</div>
       <div class="player-info"><div class="player-name">${p.name}${i === 0 ? ' 🏆' : ''}</div><div class="player-role">${role ? role.name : ''}</div></div>
-      <div class="score-pts">${p.total}</div></div>`;
+      <div style="font-size:22px;font-weight:600;color:${p.color}">${p.total}</div></div>`;
   }).join('');
 }
 </script>
