@@ -522,6 +522,17 @@ window.startGame = async function () {
 function onRoomUpdate(d) {
   renderLobby(d);
   if (d.phase === 'deploy') renderDeploy(d);
+  if (d.phase === 'calculating') {
+    // 结算中，显示等待
+    document.getElementById('waiting-title').textContent = '结算中…';
+    document.getElementById('waiting-desc').textContent = '正在计算本轮得分，请稍候';
+    document.getElementById('deploy-form').style.display = 'none';
+    hideAllSkillSections();
+    document.getElementById('submitted-overlay').style.display = 'block';
+    document.getElementById('nongji-peek-phase').style.display = 'none';
+    document.getElementById('jiangyou-phase').style.display = 'none';
+    showScreen('deploy');
+  }
   if (d.phase === 'nongji_peek') renderNongjiPeek(d);
   if (d.phase === 'jiangyou_move') renderJiangyouPhase(d);
   if (d.phase === 'result') renderResult(d);
@@ -637,7 +648,6 @@ function buildSkillSections(d) {
 
   if (myRole?.id === 1 && !myDep.lazijiDone) {
     document.getElementById('laziji-section').style.display = 'block';
-    document.getElementById('laziji-city').innerHTML = `<option value="">-- 不使用 --</option>` + cityOpts();
   }
   if (myRole?.id === 2 && round <= 4 && !myDep.zhajiDone) {
     const left = usesLeft(d, 'zhaji', 1, 0);
