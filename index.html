@@ -409,7 +409,7 @@ function loadSession() { try { return JSON.parse(localStorage.getItem('cc_s') ||
 window.clearAndHome = function () { localStorage.removeItem('cc_s'); location.reload(); };
 
 const ROLES = [
-  { id: 1, name: "辣子鸡丁", skill: "火辣袭击（1次）：选一城池，该城其他玩家军队-3" },
+  { id: 1, name: "辣子鸡丁", skill: "火辣袭击（1次）：本轮所有放兵城池，其他玩家军队-3" },
   { id: 2, name: "炸鸡桶", skill: "炸鸡（前4轮1次）：摧毁目标城所有兵，获等同兵数的分" },
   { id: 3, name: "可乐鸡翅", skill: "甜咸互换（3次，5/6轮1次）：秘密调换两城价值，差≤6" },
   { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人提交后，可看一名玩家放置再重新决定" },
@@ -522,17 +522,6 @@ window.startGame = async function () {
 function onRoomUpdate(d) {
   renderLobby(d);
   if (d.phase === 'deploy') renderDeploy(d);
-  if (d.phase === 'calculating') {
-    // 结算中，显示等待
-    document.getElementById('waiting-title').textContent = '结算中…';
-    document.getElementById('waiting-desc').textContent = '正在计算本轮得分，请稍候';
-    document.getElementById('deploy-form').style.display = 'none';
-    hideAllSkillSections();
-    document.getElementById('submitted-overlay').style.display = 'block';
-    document.getElementById('nongji-peek-phase').style.display = 'none';
-    document.getElementById('jiangyou-phase').style.display = 'none';
-    showScreen('deploy');
-  }
   if (d.phase === 'nongji_peek') renderNongjiPeek(d);
   if (d.phase === 'jiangyou_move') renderJiangyouPhase(d);
   if (d.phase === 'result') renderResult(d);
@@ -603,19 +592,20 @@ function renderDeploy(d) {
     document.getElementById('submitted-overlay').style.display = 'none';
     document.getElementById('nongji-peek-phase').style.display = 'none';
     document.getElementById('jiangyou-phase').style.display = 'none';
-    buildCityGrid(round, armyMax);
+    buildCityGrid(round, armyMax, isYuanyangPartner);
     buildSkillSections(d);
   }
 }
 
-function buildCityGrid(round, maxArmy) {
+function buildCityGrid(round, maxArmy, isYuanyangPartner) {
   const isDouble = round >= 5;
+  const allowHalf = myRole?.id === 12 && !isYuanyangPartner;
   if (!currentDeployData[round]) currentDeployData[round] = Array(17).fill(0);
   const grid = document.getElementById('city-grid'); grid.innerHTML = '';
   for (let c = 1; c <= 16; c++) {
     const cell = document.createElement('div'); cell.className = 'city-cell';
     cell.innerHTML = `<div class="city-num">${c}号${isDouble ? '<div class="city-double">×2</div>' : ''}</div>
-      <input type="number" min="0" max="12" step="${myRole?.id === 12 ? 0.5 : 1}" value="${currentDeployData[round][c] || ''}" placeholder="0" oninput="updateDeploy(${round},${c},this.value)" />`;
+      <input type="number" min="0" max="12" step="${allowHalf ? 0.5 : 1}" value="${currentDeployData[round][c] || ''}" placeholder="0" oninput="updateDeploy(${round},${c},this.value)" />`;
     grid.appendChild(cell);
   }
   updateArmyBar(round, maxArmy, 'army-fill', 'army-count');
@@ -807,6 +797,10 @@ window.submitYuanyang = async function () {
   const target = document.getElementById('yuanyang-target').value;
   if (!target) { toast('请选择合作玩家'); return; }
   const d = await dbGet(myRoom);
+  if (d.deploys?.[target]?.submitted) {
+    toast('该玩家已提交部署，无法发起合作（请尽早使用）');
+    return;
+  }
   d.skillEffects[`yuanyang_r${d.round}`] = { player: myId, target };
   const st = d.skillState || {};
   st.yuanyang_used = (st.yuanyang_used || 0) + 1;
@@ -888,12 +882,6 @@ async function checkAfterSubmit(oldData) {
   const allSubmitted = players.every(pid => deps[pid]?.submitted);
   if (!allSubmitted) return;
 
-  // 抢占式加锁：只有第一个抢到的客户端执行结算
-  const locked = { ...fresh, phase: 'calculating' };
-  await dbSet(myRoom, locked);
-  const verify = await dbGet(myRoom);
-  if (verify.phase !== 'calculating') return; // 被别人抢先了
-
   // check nongji
   const nongjiEff = fresh.skillEffects && fresh.skillEffects[`nongji_r${fresh.round}`];
   if (nongjiEff && nongjiEff.target) {
@@ -907,7 +895,10 @@ async function checkAfterSubmit(oldData) {
     fresh.phase = 'jiangyou_move';
     await dbSet(myRoom, fresh); return;
   }
-  calcResult(fresh);(d) {
+  calcResult(fresh);
+}
+
+function renderWaiting(d) {
   const players = allPlayers(d);
   const deps = d.deploys || {};
   document.getElementById('waiting-list').innerHTML = players.map(p => {
@@ -1068,10 +1059,7 @@ window.skipJiangyou = async function () {
 
 // ── Calc result ──
 async function calcResult(data) {
-  // data가 없으면 직접 fetch, 있으면 그대로 사용
   const fresh = data || await dbGet(myRoom);
-  // calculating 상태에서 호출된 경우(checkAfterSubmit에서) 정상 진행
-  // 이미 result/final이면 중단
   if (fresh.phase === 'result' || fresh.phase === 'final') return;
 
   const round = fresh.round, isDouble = round >= 5;
@@ -1079,22 +1067,29 @@ async function calcResult(data) {
   const deploys = fresh.deploys || {};
   const effects = fresh.skillEffects || {};
 
+  // 鸳鸯鸡（先取，用于判断其他技能是否失效）
+  const yyEff = effects[`yuanyang_r${round}`];
+  const yyBoundIds = yyEff ? [yyEff.player, yyEff.target] : [];
+  const isYyBound = (pid) => yyBoundIds.includes(pid);
+
+  // 炸鸡桶（鸳鸯鸡绑的人发动则失效）
+  const zhajiEffRaw = effects[`zhaji_r${round}`];
+  const zhajiEff = (zhajiEffRaw && !isYyBound(zhajiEffRaw.playerId)) ? zhajiEffRaw : null;
+  const zhajiCity = zhajiEff?.city || null;
+
+  // 黄焖鸡（鸳鸯鸡绑的人发动则失效）
+  const hmEffRaw = effects[`huangmen_r${round}`];
+  const hmEff = (hmEffRaw && !isYyBound(hmEffRaw.playerId)) ? hmEffRaw : null;
+  const hmCity = hmEff?.city || null;
+
+  // 可乐鸡翅（鸳鸯鸡绑的人发动则失效）
+  const keleSwapRaw = effects[`kele_r${round}`];
+  const keleSwap = (keleSwapRaw && !isYyBound(keleSwapRaw.playerId)) ? keleSwapRaw : null;
+
   // 可乐鸡翅城池价值映射
   const cityVal = {};
   for (let c = 1; c <= 16; c++) cityVal[c] = c;
-  const keleSwap = effects[`kele_r${round}`];
   if (keleSwap) { cityVal[keleSwap.c1] = keleSwap.c2; cityVal[keleSwap.c2] = keleSwap.c1; }
-
-  // 炸鸡桶
-  const zhajiEff = effects[`zhaji_r${round}`];
-  const zhajiCity = zhajiEff?.city || null;
-
-  // 黄焖鸡
-  const hmEff = effects[`huangmen_r${round}`];
-  const hmCity = hmEff?.city || null;
-
-  // 鸳鸯鸡
-  const yyEff = effects[`yuanyang_r${round}`];
 
   // 实际兵力（处理辣子鸡-3 和 鸳鸯鸡同城归0）
   const effectiveTroops = {};
@@ -1102,7 +1097,8 @@ async function calcResult(data) {
 
   // 辣子鸡丁：辣子鸡放了兵的所有城池，其他玩家-3（负数保留）
   const lazijiEff = effects[`laziji_r${round}`];
-  if (lazijiEff?.active) {
+  const lazijiActive = lazijiEff?.active && !isYyBound(lazijiEff.playerId);
+  if (lazijiActive) {
     const lazijiTroops = deploys[lazijiEff.playerId]?.troops || Array(16).fill(0);
     players.forEach(p => {
       if (p.id !== lazijiEff.playerId) {
@@ -1111,11 +1107,13 @@ async function calcResult(data) {
     });
   }
 
-  // 鸳鸯鸡同城合计>12归0
+  // 鸳鸯鸡同城合计>12归0（基于原始部署判断，不是辣子鸡修改后）
   if (yyEff) {
     const p1 = yyEff.player, p2 = yyEff.target;
+    const t1Raw = deploys[p1]?.troops || Array(16).fill(0);
+    const t2Raw = deploys[p2]?.troops || Array(16).fill(0);
     for (let c = 0; c < 16; c++) {
-      const sum = (effectiveTroops[p1]?.[c] || 0) + (effectiveTroops[p2]?.[c] || 0);
+      const sum = (t1Raw[c] || 0) + (t2Raw[c] || 0);
       if (sum > 12) { effectiveTroops[p1][c] = 0; effectiveTroops[p2][c] = 0; }
     }
   }
@@ -1166,29 +1164,17 @@ async function calcResult(data) {
   // 炸鸡桶加分
   players.forEach(p => { roundScores[p.id] += zhajiBonus[p.id]; });
 
-  // 鸳鸯鸡收益平分
-  if (yyEff) {
-    const p1 = yyEff.player, p2 = yyEff.target;
-    const total = (roundScores[p1] || 0) + (roundScores[p2] || 0);
-    const each = total / 2;
-    roundScores[p1] = each; roundScores[p2] = each;
-  }
-
   const skillLog = [];
 
-  if (lazijiEff?.active) skillLog.push(`辣子鸡丁：${fresh.players[lazijiEff.playerId]?.name} 发动火辣袭击，她放了兵的所有城池其他玩家-3兵`);
+  if (lazijiActive) skillLog.push(`辣子鸡丁：${fresh.players[lazijiEff.playerId]?.name} 发动火辣袭击，她放了兵的所有城池其他玩家-3兵`);
   if (zhajiCity) {
     const destroyed = Object.values(deploys).reduce((s, dep) => s + (dep?.troops?.[zhajiCity - 1] || 0), 0);
     skillLog.push(`炸鸡桶：${fresh.players[zhajiEff.playerId]?.name} 在 ${zhajiCity}号城 投炸鸡，摧毁 ${destroyed} 兵，获 ${destroyed} 分`);
   }
-  if (yyEff) {
-    const p1n = fresh.players[yyEff.player]?.name, p2n = fresh.players[yyEff.target]?.name;
-    skillLog.push(`鸳鸯鸡：${p1n} 与 ${p2n} 合作，收益平分`);
-  }
   if (keleSwap) skillLog.push(`可乐鸡翅：${fresh.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
 
-  // 黄焖鸡
-  if (hmCity !== null) {
+  // 黄焖鸡（如果选的城被炸鸡桶炸了，技能无效，整城消失）
+  if (hmCity !== null && hmCity !== zhajiCity) {
     const baseVal = cityVal[hmCity];
     const penalty = isDouble ? baseVal * 2 : baseVal;
     const winner = cityWinners[hmCity]?.winner;
@@ -1204,6 +1190,8 @@ async function calcResult(data) {
         skillLog.push(`  → ${p.name} 扣 ${penalty} 分`);
       }
     });
+  } else if (hmCity !== null && hmCity === zhajiCity) {
+    skillLog.push(`黄焖鸡米饭：${fresh.players[hmEff.playerId]?.name} 选的 ${hmCity}号城被炸鸡桶摧毁，技能无效`);
   }
 
   // 大盘鸡扣分
@@ -1217,25 +1205,24 @@ async function calcResult(data) {
     if (penalty > 0) { roundScores[p.id] -= penalty; skillLog.push(`大盘鸡：${p.name} 未得分兵 ${wasted} 个，扣 ${penalty} 分`); }
   });
 
-  // 基础+技能结算后的累计（用于白斩/左宗判断）
+  // 鸳鸯鸡收益平分（所有技能效果之后，白斩/左宗/泡椒之前）
+  if (yyEff) {
+    const p1 = yyEff.player, p2 = yyEff.target;
+    const total = (roundScores[p1] || 0) + (roundScores[p2] || 0);
+    const each = total / 2;
+    roundScores[p1] = each; roundScores[p2] = each;
+    const p1n = fresh.players[p1]?.name, p2n = fresh.players[p2]?.name;
+    skillLog.push(`鸳鸯鸡：${p1n} 与 ${p2n} 合作，本轮所有收益平分（各 ${each} 分）`);
+  }
+
+  // 基础+技能结算后的累计（用于白斩/左宗/泡椒判断，三者互不影响）
   const baseTotal = {};
   players.forEach(p => { baseTotal[p.id] = (fresh.totalScores?.[p.id] || 0) + roundScores[p.id]; });
 
-  // 泡椒鸡爪：本轮累计唯一最低偷所有人2分
-  const paojiaoPlayer = players.find(p => p.roleId === 8);
-  if (paojiaoPlayer) {
-    const minScore = Math.min(...players.map(p => baseTotal[p.id]));
-    const minPlayers = players.filter(p => baseTotal[p.id] === minScore);
-    if (minPlayers.length === 1 && minPlayers[0].id === paojiaoPlayer.id) {
-      players.forEach(p => { if (p.id !== paojiaoPlayer.id) { baseTotal[p.id] -= 2; roundScores[p.id] -= 2; baseTotal[paojiaoPlayer.id] += 2; roundScores[paojiaoPlayer.id] += 2; } });
-      skillLog.push(`泡椒鸡爪：${paojiaoPlayer.name} 为本轮累计唯一最低，偷所有人各2分`);
-    }
-  }
-
-  // 白斩鸡（基于baseTotal排名）
+  // 白斩鸡（基于baseTotal；被鸳鸯鸡绑则技能失效）
   let baizhanDetail = null;
   const bzP = players.find(p => p.roleId === 11);
-  if (bzP) {
+  if (bzP && !isYyBound(bzP.id)) {
     const pred = deploys[bzP.id]?.baizhanPrediction || [];
     const actualRanked = [...players].sort((a, b) => (baseTotal[b.id] || 0) - (baseTotal[a.id] || 0)).map(p => p.id);
     let correct = 0; pred.forEach((pid, i) => { if (actualRanked[i] === pid) correct++; });
@@ -1244,9 +1231,10 @@ async function calcResult(data) {
     if (bonus > 0) skillLog.push(`白斩鸡拼盘：${bzP.name} 猜对 ${correct} 人，+${bonus} 分`);
   }
 
-  // 左宗鸡（基于baseTotal）
+  // 左宗鸡（基于baseTotal；被鸳鸯鸡绑则技能失效）
   let zuozongDetail = null;
-  const zzEff = effects[`zuozong_r${round}`];
+  const zzEffRaw = effects[`zuozong_r${round}`];
+  const zzEff = (zzEffRaw && !isYyBound(zzEffRaw.playerId)) ? zzEffRaw : null;
   if (zzEff) {
     const zzPlayer = fresh.players[zzEff.playerId];
     const target = fresh.players[zzEff.target];
@@ -1258,14 +1246,33 @@ async function calcResult(data) {
     else skillLog.push(`左宗鸡：${zzPlayer?.name} 选 ${target?.name}，${target?.name} 不在最低三名，无加分`);
   }
 
-  // 最终totalScores（baseTotal + 白斩 + 左宗，互不干扰）
-  const totalScores = { ...baseTotal };
-  if (baizhanDetail && baizhanDetail.bonus > 0) totalScores[baizhanDetail.playerId] += baizhanDetail.bonus;
-  if (zuozongDetail && zuozongDetail.isBottom3) totalScores[zuozongDetail.playerId] += 10;
+  // 泡椒鸡爪（基于baseTotal；被鸳鸯鸡绑则技能失效）
+  const paojiaoPlayer = players.find(p => p.roleId === 8);
+  let paojiaoTriggered = false;
+  if (paojiaoPlayer && !isYyBound(paojiaoPlayer.id)) {
+    const minScore = Math.min(...players.map(p => baseTotal[p.id]));
+    const minPlayers = players.filter(p => baseTotal[p.id] === minScore);
+    if (minPlayers.length === 1 && minPlayers[0].id === paojiaoPlayer.id) {
+      paojiaoTriggered = true;
+      skillLog.push(`泡椒鸡爪：${paojiaoPlayer.name} 为本轮累计唯一最低，偷所有人各2分`);
+    }
+  }
 
-  // roundScores也加上白斩/左宗（用于显示）
+  // 把白斩/左宗/泡椒加分写入 roundScores
   if (baizhanDetail && baizhanDetail.bonus > 0) roundScores[baizhanDetail.playerId] += baizhanDetail.bonus;
   if (zuozongDetail && zuozongDetail.isBottom3) roundScores[zuozongDetail.playerId] += 10;
+  if (paojiaoTriggered) {
+    players.forEach(p => {
+      if (p.id !== paojiaoPlayer.id) {
+        roundScores[p.id] -= 2;
+        roundScores[paojiaoPlayer.id] += 2;
+      }
+    });
+  }
+
+  // 最终累计
+  const totalScores = {};
+  players.forEach(p => { totalScores[p.id] = (fresh.totalScores?.[p.id] || 0) + roundScores[p.id]; });
 
   // 保存兵力快照（用于结算页显示）
   const troopSnapshot = {};
