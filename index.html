@@ -328,7 +328,7 @@ input[type=checkbox]{width:auto;padding:0}
       <div class="city-result-grid" id="city-result-grid"></div>
     </div>
     <div class="card">
-      <div class="card-title">本轮得分</div>
+      <div class="card-title">累计排名</div>
       <div id="round-scores"></div>
     </div>
     <div class="card" id="skill-log-card" style="display:none">
@@ -1327,14 +1327,22 @@ function renderResult(d) {
     grid.appendChild(cell);
   }
 
-  const sorted = players.map(p => ({ ...p, r: rs[p.id] || 0, t: ts[p.id] || 0 })).sort((a, b) => b.r - a.r);
-  document.getElementById('round-scores').innerHTML = sorted.map((p, i) => {
+  // 按累计总分排名（同分跳号：1, 2, 2, 4...）
+  const sorted = players.map(p => ({ ...p, r: rs[p.id] || 0, t: ts[p.id] || 0 })).sort((a, b) => b.t - a.t);
+  let lastScore = null, lastRank = 0;
+  sorted.forEach((p, i) => {
+    if (p.t === lastScore) { p.rank = lastRank; }
+    else { p.rank = i + 1; lastScore = p.t; lastRank = p.rank; }
+  });
+  document.getElementById('round-scores').innerHTML = sorted.map(p => {
+    const rankColor = p.rank === 1 ? 'var(--gold2)' : p.rank === 2 ? '#b0b8c8' : p.rank === 3 ? '#c9956c' : 'var(--text3)';
     return `<div class="score-row">
+      <div style="font-size:18px;font-weight:700;font-family:'Songti SC','SimSun',serif;width:28px;text-align:center;color:${rankColor};flex-shrink:0">${p.rank}</div>
       <div class="avatar" style="background:${p.color}22;color:${p.color};width:30px;height:30px;font-size:12px;flex-shrink:0">${p.name.slice(0, 2)}</div>
       <div class="player-info"><div class="player-name">${p.name}</div></div>
       <div style="text-align:right">
-        <div style="font-size:18px;font-weight:600;color:${p.color}">${p.r >= 0 ? '+' : ''}${p.r}</div>
-        <div class="score-delta">累计 ${p.t}</div></div></div>`;
+        <div style="font-size:18px;font-weight:600;color:${p.color}">${p.t}</div>
+        <div class="score-delta">本轮 ${p.r >= 0 ? '+' : ''}${p.r}</div></div></div>`;
   }).join('');
 
   const log = d.skillLog || [];
@@ -1387,11 +1395,18 @@ function renderFinal(d) {
   const players = allPlayers(d);
   const ts = d.totalScores || {};
   const sorted = players.map(p => ({ ...p, total: ts[p.id] || 0 })).sort((a, b) => b.total - a.total);
-  document.getElementById('final-scores').innerHTML = sorted.map((p, i) => {
+  let lastScore = null, lastRank = 0;
+  sorted.forEach((p, i) => {
+    if (p.total === lastScore) { p.rank = lastRank; }
+    else { p.rank = i + 1; lastScore = p.total; lastRank = p.rank; }
+  });
+  document.getElementById('final-scores').innerHTML = sorted.map(p => {
+    const rankColor = p.rank === 1 ? 'var(--gold2)' : p.rank === 2 ? '#b0b8c8' : p.rank === 3 ? '#c9956c' : 'var(--text3)';
     const role = ROLES.find(r => r.id === p.roleId);
     return `<div class="score-row">
+      <div style="font-size:20px;font-weight:700;font-family:'Songti SC','SimSun',serif;width:32px;text-align:center;color:${rankColor};flex-shrink:0">${p.rank}</div>
       <div class="avatar" style="background:${p.color}22;color:${p.color}">${p.name.slice(0, 2)}</div>
-      <div class="player-info"><div class="player-name">${p.name}${i === 0 ? ' 🏆' : ''}</div><div class="player-role">${role ? role.name : ''}</div></div>
+      <div class="player-info"><div class="player-name">${p.name}${p.rank === 1 ? ' 🏆' : ''}</div><div class="player-role">${role ? role.name : ''}</div></div>
       <div style="font-size:22px;font-weight:600;color:${p.color}">${p.total}</div></div>`;
   }).join('');
 }
