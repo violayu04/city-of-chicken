@@ -882,16 +882,20 @@ async function checkAfterSubmit(oldData) {
   const allSubmitted = players.every(pid => deps[pid]?.submitted);
   if (!allSubmitted) return;
 
+  // 鸳鸯鸡绑的人技能失效
+  const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
+  const yyBound = yy ? [yy.player, yy.target] : [];
+
   // check nongji
   const nongjiEff = fresh.skillEffects && fresh.skillEffects[`nongji_r${fresh.round}`];
-  if (nongjiEff && nongjiEff.target) {
+  if (nongjiEff && nongjiEff.target && !yyBound.includes(nongjiEff.playerId)) {
     fresh.phase = 'nongji_peek';
     await dbSet(myRoom, fresh); return;
   }
   // check jiangyou
   const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
   const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
-  if (jyPlayer && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
+  if (jyPlayer && !yyBound.includes(jyPlayer.id) && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
     fresh.phase = 'jiangyou_move';
     await dbSet(myRoom, fresh); return;
   }
@@ -994,10 +998,13 @@ async function checkAfterNongji(d) {
   if (fresh.phase !== 'nongji_peek') return;
   const eff = fresh.skillEffects[`nongji_r${fresh.round}`];
   if (!fresh.deploys[eff.playerId]?.nongjiRedeployDone) return;
+  // 鸳鸯鸡绑的人技能失效
+  const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
+  const yyBound = yy ? [yy.player, yy.target] : [];
   // move to jiangyou or result
   const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
   const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
-  if (jyPlayer && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
+  if (jyPlayer && !yyBound.includes(jyPlayer.id) && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
     fresh.phase = 'jiangyou_move';
     await dbSet(myRoom, fresh); return;
   }
@@ -1318,7 +1325,7 @@ function renderResult(d) {
     const baseVal = cv[c] || c;
     const pts = isDouble ? baseVal * 2 : baseVal;
     const winnerPlayer = winner ? players.find(p => p.id === winner) : null;
-    const borderColor = winnerPlayer ? winnerPlayer.color : 'var(--border)';
+    const cell = document.createElement('div');
     cell.className = 'city-result-cell' + (isHM ? ' hm' : '');
     if (winnerPlayer) cell.style.borderColor = winnerPlayer.color;
     if (winnerPlayer) cell.style.background = winnerPlayer.color + '11';
