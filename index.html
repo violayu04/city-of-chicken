@@ -839,9 +839,11 @@ async function checkAfterSubmit(oldData) {
   const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
   const yyBound = yy ? [yy.player, yy.target] : [];
 
-  // check nongji（浓鸡汤玩家在场就触发，让其在该阶段选目标）
+  // check nongji（浓鸡汤玩家在场且还有可看的人才触发）
   const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
-  if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
+  const nongjiPeeked = fresh.skillState?.nongji_peeked || [];
+  const availableTargets = allPlayers(fresh).filter(p => p.id !== nongjiPlayer?.id && !nongjiPeeked.includes(p.id));
+  if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && availableTargets.length > 0 && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
     fresh.phase = 'nongji_peek';
     await dbSet(myRoom, fresh); return;
   }
@@ -958,6 +960,7 @@ window.submitNongjiLate = async function () {
 
 window.skipNongjiLate = async function () {
   const d = await dbGet(myRoom);
+  if (!d.deploys) d.deploys = {};
   if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].nongjiSkipped = true;
   d.deploys[myId].nongjiRedeployDone = true;
