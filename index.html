@@ -1694,7 +1694,7 @@ async function calcResult(data) {
 
   if (lazijiActive) skillLog.push(`辣子鸡丁：${fresh.players[lazijiEff.playerId]?.name} 发动火辣袭击，她放了兵的所有城池其他玩家-3兵`);
   if (zhajiCity) {
-    const destroyed = Object.values(deploys).reduce((s, dep) => s + (dep?.troops?.[zhajiCity - 1] || 0), 0);
+    const destroyed = zhajiBonus[zhajiEff.playerId] || 0;
     skillLog.push(`炸鸡桶：${fresh.players[zhajiEff.playerId]?.name} 在 ${zhajiCity}号城 投炸鸡，摧毁 ${destroyed} 兵，获 ${destroyed} 分`);
   }
   if (keleSwap) skillLog.push(`可乐鸡翅：${fresh.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
@@ -1702,7 +1702,7 @@ async function calcResult(data) {
     const p1 = yyEff.player, p2 = yyEff.target;
     const badCities = [...(yyInvalidCities[p1] || new Set())];
     if (badCities.length) {
-      skillLog.push(`鸳鸯鸡：${fresh.players[p1]?.name} 与 ${fresh.players[p2]?.name} 在 ${badCities.join('、')}号城合计超过12兵，该城双方归0且不得分`);
+      skillLog.push(`鸳鸯鸡：${fresh.players[p1]?.name} 与 ${fresh.players[p2]?.name} 在 ${badCities.join('、')}号城合计超过12兵，该城双方视为没有出兵，不参与胜负、炸鸡或黄焖鸡扣分`);
     }
   }
 
@@ -1722,8 +1722,8 @@ async function calcResult(data) {
       // 这里必须看 deploys 原始兵力，而不是 effectiveTroops：
       // 这样被辣子鸡从 3 扣到 0、从 2 扣到 -1 的玩家仍然算参与；
       // 完全没放兵的人不会被误扣分。
-      const originalTroops = deploys[p.id]?.troops?.[hmCity - 1] || 0;
-      // 鸳鸯鸡超限清零仍算“原本参与但失败”，所以黄焖鸡可正常扣分；口水鸡仍会返还。
+      const originalTroops = yyInvalidCities[p.id]?.has(hmCity) ? 0 : (deploys[p.id]?.troops?.[hmCity - 1] || 0);
+      // 鸳鸯鸡双方同城合计超过12时，该城对双方视为“没有出兵”，因此不吃黄焖鸡失败/流局扣分。
       if (originalTroops > 0 && !cityWon[p.id].has(hmCity)) {
         roundScores[p.id] -= penalty;
         skillLog.push(`  → ${p.name} 在 ${hmCity}号城有放兵但未得分，扣 ${penalty} 分`);
