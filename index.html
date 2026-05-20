@@ -1144,24 +1144,29 @@ async function calcResult(data) {
   }
 
   // 每城胜负：顺延找唯一最大（撞了就找下一个唯一最大）
-  function findWinner(troops) {
-    const vals = Object.values(troops);
-    const sorted = [...new Set(vals)].sort((a, b) => b - a);
+  // 必须原本出过牌(原始>0)才能成为赢家；被辣子鸡-3扣成负数仍能赢
+  function findWinner(troops, rawTroops) {
+    const sorted = [...new Set(Object.values(troops))].sort((a, b) => b - a);
     for (const val of sorted) {
-      const ps = Object.keys(troops).filter(id => troops[id] === val);
+      const ps = Object.keys(troops).filter(id => troops[id] === val && (rawTroops[id] || 0) > 0);
       if (ps.length === 1) return ps[0];
+      if (ps.length > 1) continue; // 撞了，找下一个
     }
-    return null; // 所有值都相同，流局
+    return null;
   }
 
   const cityWinners = {};
   for (let c = 1; c <= 16; c++) {
     if (c === zhajiCity) { cityWinners[c] = { winner: null, max: 0, troops: {}, bombed: true }; continue; }
     const troops = {};
-    players.forEach(p => { troops[p.id] = effectiveTroops[p.id][c - 1] || 0; });
-    const allZero = Object.values(troops).every(v => v === 0);
-    if (allZero) { cityWinners[c] = { winner: null, max: 0, troops }; continue; }
-    const winner = findWinner(troops);
+    const rawTroops = {};
+    players.forEach(p => {
+      troops[p.id] = effectiveTroops[p.id][c - 1] || 0;
+      rawTroops[p.id] = deploys[p.id]?.troops?.[c - 1] || 0;
+    });
+    const noneDeployed = Object.values(rawTroops).every(v => v === 0);
+    if (noneDeployed) { cityWinners[c] = { winner: null, max: 0, troops }; continue; }
+    const winner = findWinner(troops, rawTroops);
     const winVal = winner ? troops[winner] : null;
     cityWinners[c] = { winner, max: winVal, troops };
   }
