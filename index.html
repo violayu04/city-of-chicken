@@ -88,6 +88,9 @@ input[type=checkbox]{width:auto;padding:0}
 .phase-banner-title{font-size:15px;font-weight:500;color:#7ab0e8;margin-bottom:4px}
 .phase-banner-desc{font-size:12px;color:var(--text2)}
 .checkbox-row{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;color:var(--text2)}
+.hist-btn{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text2);font-family:inherit;font-size:13px;padding:6px 12px;cursor:pointer;transition:all .15s;min-width:48px}
+.hist-btn:hover{border-color:var(--gold);color:var(--gold)}
+.hist-btn.active{background:var(--gold);border-color:var(--gold);color:#0e0e10;font-weight:500}
 </style>
 </head>
 <body>
@@ -337,12 +340,17 @@ input[type=checkbox]{width:auto;padding:0}
       </div>
       <span class="badge badge-gold" id="result-round-badge">1/6</span>
     </div>
+    <!-- 历史轮次切换 -->
+    <div class="card" id="history-nav-card" style="display:none;padding:10px 12px">
+      <div style="font-size:11px;letter-spacing:.1em;color:var(--text3);margin-bottom:8px">查看历史轮次</div>
+      <div id="history-nav-buttons" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
     <div class="card">
       <div class="card-title">城池归属</div>
       <div class="city-result-grid" id="city-result-grid"></div>
     </div>
     <div class="card">
-      <div class="card-title">累计排名</div>
+      <div class="card-title" id="ranking-card-title">累计排名</div>
       <div id="round-scores"></div>
     </div>
     <div class="card" id="skill-log-card" style="display:none">
@@ -361,6 +369,9 @@ input[type=checkbox]{width:auto;padding:0}
     <div id="game-over-btn" style="display:none">
       <button class="btn btn-gold" style="width:100%" onclick="showFinal()">查看最终排名 →</button>
     </div>
+    <div id="back-to-final-btn" style="display:none">
+      <button class="btn" style="width:100%" onclick="backToFinal()">← 返回最终排名</button>
+    </div>
   </div>
 
   <!-- 最终排名 -->
@@ -370,7 +381,8 @@ input[type=checkbox]{width:auto;padding:0}
       <div style="font-size:24px;font-weight:600;font-family:'Songti SC','SimSun',serif;color:var(--gold2)">最终排名</div>
     </div>
     <div class="card"><div id="final-scores"></div></div>
-    <button class="btn" style="width:100%;margin-top:1rem" onclick="clearAndHome()">再来一局</button>
+    <button class="btn" style="width:100%;margin-top:1rem" onclick="viewHistoryFromFinal()">回看历史轮次</button>
+    <button class="btn" style="width:100%;margin-top:8px" onclick="clearAndHome()">再来一局</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -418,6 +430,7 @@ const COLORS = ["#c9a84c","#4c7ec9","#c94c4c","#4caa7c","#9f6bc9","#c97e4c","#4c
 let myId = null, myName = '', myRoom = '', isHost = false, myRole = null;
 let currentDeployData = {}, currentMaxArmy = 12;
 let nongjiRedeployData = [];
+let viewingRound = null; // 结算页查看的历史轮次；null 表示最新轮
 
 function toast(msg, dur = 2500) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), dur); }
 function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById('screen-' + id).classList.add('active'); }
@@ -595,12 +608,18 @@ window.startGame = async function () {
 };
 
 function onRoomUpdate(d) {
+  // 进入部署阶段时重置历史查看（避免下一轮结算时还停在旧轮）
+  if (d.phase === 'deploy' && viewingRound !== null) viewingRound = null;
   renderLobby(d);
   if (d.phase === 'deploy') renderDeploy(d);
   if (d.phase === 'nongji_peek') renderNongjiPeek(d);
   if (d.phase === 'jiangyou_move') renderJiangyouPhase(d);
   if (d.phase === 'result') renderResult(d);
-  if (d.phase === 'final') renderFinal(d);
+  // 在最终阶段：若用户主动选择了查看历史，保持在 result 页
+  if (d.phase === 'final') {
+    if (viewingRound !== null && d.history?.[viewingRound]) renderResult(d);
+    else renderFinal(d);
+  }
 }
 
 function renderLobby(d) {
@@ -1640,10 +1659,17 @@ async function calcResult(data) {
 
   // 炸鸡桶：摧毁目标城所有兵，炸鸡桶玩家获得等同兵数的分
   const zhajiBonus = {};
+  const zhajiBreakdown = []; // 调试：记录每个玩家在被炸城的兵
   players.forEach(p => { zhajiBonus[p.id] = 0; });
   if (zhajiCity) {
     let totalDestroyed = 0;
-    players.forEach(p => { totalDestroyed += effectiveTroops[p.id][zhajiCity - 1] || 0; effectiveTroops[p.id][zhajiCity - 1] = 0; });
+    players.forEach(p => {
+      const raw = deploys[p.id]?.troops?.[zhajiCity - 1] || 0;
+      const eff = effectiveTroops[p.id][zhajiCity - 1] || 0;
+      if (raw > 0 || eff > 0) zhajiBreakdown.push(`${fresh.players[p.id]?.name}:原${raw}/算${eff}`);
+      totalDestroyed += eff;
+      effectiveTroops[p.id][zhajiCity - 1] = 0;
+    });
     zhajiBonus[zhajiEff.playerId] = totalDestroyed;
   }
 
@@ -1717,6 +1743,7 @@ async function calcResult(data) {
   if (zhajiCity) {
     const destroyed = zhajiBonus[zhajiEff.playerId] || 0;
     skillLog.push(`炸鸡桶：${fresh.players[zhajiEff.playerId]?.name} 在 ${zhajiCity}号城 投炸鸡，摧毁 ${destroyed} 兵，获 ${destroyed} 分`);
+    if (zhajiBreakdown.length) skillLog.push(`  → 该城兵力明细：${zhajiBreakdown.join('，')}`);
   }
   if (keleSwap) skillLog.push(`可乐鸡翅：${fresh.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
   if (yyEff) {
@@ -1850,6 +1877,28 @@ async function calcResult(data) {
   const troopSnapshot = {};
   players.forEach(p => { troopSnapshot[p.id] = effectiveTroops[p.id] || Array(16).fill(0); });
 
+  // 历史记录：保存本轮的完整结算快照，方便复盘
+  const history = { ...(fresh.history || {}) };
+  history[round] = {
+    cityWinners,
+    cityValMap: cityVal,
+    roundScores,
+    totalScores: { ...totalScores },
+    troopSnapshot,
+    skillLog,
+    deploys: JSON.parse(JSON.stringify(deploys || {})), // 保留原始部署，供复盘
+    skillEffects: {
+      yuanyang: yyEff || null,
+      huangmen: hmEff || null,
+      zhaji: zhajiEff || null,
+      kele: keleSwap || null,
+      laziji: lazijiEff || null,
+      nongji: effects[`nongji_r${round}`] || null,
+      jiangyou: effects[`jiangyou_r${round}`] || null,
+      dapan: Object.fromEntries(players.filter(p => p.roleId === 9 && deploys[p.id]?.dapanExtra).map(p => [p.id, deploys[p.id].dapanExtra]))
+    }
+  };
+
   await dbSet(myRoom, {
     ...fresh,
     phase: round >= 6 ? 'final' : 'result',
@@ -1860,26 +1909,66 @@ async function calcResult(data) {
     totalScores,
     troopSnapshot,
     skillLog,
+    history,
     deploys: {}
   });
 }
 
 // ── Render result ──
+window.switchHistoryRound = function (r) {
+  viewingRound = r;
+  dbGet(myRoom).then(d => { if (d) renderResult(d); });
+};
+
 function renderResult(d) {
   showScreen('result');
-  const round = d.lastRound, isDouble = round >= 5;
-  document.getElementById('result-round-label').textContent = `第${round}轮${isDouble ? ' · 双倍' : ''} 结算`;
+  const latestRound = d.lastRound;
+  // 决定要渲染的轮次
+  const round = (viewingRound && d.history?.[viewingRound]) ? viewingRound : latestRound;
+  const isViewingHistory = round !== latestRound;
+  const isDouble = round >= 5;
+
+  // 从历史快照取数据；当前轮直接用顶层字段
+  const snap = (round === latestRound)
+    ? { cityWinners: d.cityWinners, cityValMap: d.cityValMap, roundScores: d.roundScores, totalScores: d.totalScores, troopSnapshot: d.troopSnapshot, skillLog: d.skillLog, skillEffects: null }
+    : d.history[round];
+
+  document.getElementById('result-round-label').textContent = `第${round}轮${isDouble ? ' · 双倍' : ''} 结算${isViewingHistory ? '（历史）' : ''}`;
   document.getElementById('result-round-badge').textContent = `${round}/6`;
+  document.getElementById('ranking-card-title').textContent = isViewingHistory ? `第${round}轮结束时排名` : '累计排名';
+
+  // 历史轮次切换按钮
+  const histCard = document.getElementById('history-nav-card');
+  const histBtns = document.getElementById('history-nav-buttons');
+  const availableRounds = Object.keys(d.history || {}).map(Number).sort((a, b) => a - b);
+  if (availableRounds.length >= 2) {
+    histCard.style.display = 'block';
+    histBtns.innerHTML = availableRounds.map(r =>
+      `<button class="hist-btn${r === round ? ' active' : ''}" onclick="switchHistoryRound(${r})">第${r}轮</button>`
+    ).join('');
+  } else {
+    histCard.style.display = 'none';
+  }
 
   const players = allPlayers(d);
-  const cw = d.cityWinners || {}, rs = d.roundScores || {}, ts = d.totalScores || {};
-  const cv = d.cityValMap || {};
-  const effects = d.skillEffects || {};
-  const hmEff = effects[`huangmen_r${round}`];
-  const keleSwap = effects[`kele_r${round}`];
-  const zhajiEff = effects[`zhaji_r${round}`];
+  const cw = snap.cityWinners || {}, rs = snap.roundScores || {}, ts = snap.totalScores || {};
+  const cv = snap.cityValMap || {};
+  // 取该轮的技能效果（历史用快照里的，最新用 skillEffects）
+  let hmEff, keleSwap, zhajiEff, yyEffR;
+  if (isViewingHistory && snap.skillEffects) {
+    hmEff = snap.skillEffects.huangmen;
+    keleSwap = snap.skillEffects.kele;
+    zhajiEff = snap.skillEffects.zhaji;
+    yyEffR = snap.skillEffects.yuanyang;
+  } else {
+    const effects = d.skillEffects || {};
+    hmEff = effects[`huangmen_r${round}`];
+    keleSwap = effects[`kele_r${round}`];
+    zhajiEff = effects[`zhaji_r${round}`];
+    yyEffR = effects[`yuanyang_r${round}`];
+  }
 
-  const troopSnapshot = d.troopSnapshot || {};
+  const troopSnapshot = snap.troopSnapshot || {};
   const grid = document.getElementById('city-result-grid'); grid.innerHTML = '';
   for (let c = 1; c <= 16; c++) {
     const isHM = c === hmEff?.city;
@@ -1898,7 +1987,6 @@ function renderResult(d) {
     html += ` +${pts}</div>`;
     if (isBombed) html += `<div class="city-tie">💥炸了</div>`;
     else if (winner) {
-      const yyEffR = effects[`yuanyang_r${round}`];
       const isYyWin = yyEffR && winner === yyEffR.player;
       if (isYyWin) {
         const p1 = players.find(p => p.id === yyEffR.player);
@@ -1942,14 +2030,15 @@ function renderResult(d) {
         <div class="score-delta">本轮 ${p.r >= 0 ? '+' : ''}${p.r}</div></div></div>`;
   }).join('');
 
-  const log = d.skillLog || [];
+  const log = snap.skillLog || [];
   const logCard = document.getElementById('skill-log-card');
   if (log.length) { logCard.style.display = 'block'; document.getElementById('skill-log-content').innerHTML = log.map(l => `<div style="font-size:12px;color:var(--text2);padding:3px 0;line-height:1.5">${l}</div>`).join(''); }
   else logCard.style.display = 'none';
 
-  if (isHost) {
-    document.getElementById('host-next-btn').style.display = round < 6 ? 'block' : 'none';
-    document.getElementById('game-over-btn').style.display = round >= 6 ? 'block' : 'none';
+  // 主持人调分和"下一轮"按钮只在查看最新轮时显示
+  if (isHost && !isViewingHistory) {
+    document.getElementById('host-next-btn').style.display = latestRound < 6 ? 'block' : 'none';
+    document.getElementById('game-over-btn').style.display = latestRound >= 6 ? 'block' : 'none';
     document.getElementById('host-adjust-card').style.display = 'block';
     document.getElementById('host-adjust-list').innerHTML = players.map(p => {
       const role = ROLES.find(r => r.id === p.roleId);
@@ -1964,6 +2053,10 @@ function renderResult(d) {
     document.getElementById('host-next-btn').style.display = 'none';
     document.getElementById('game-over-btn').style.display = 'none';
   }
+
+  // 游戏结束后从历史回看时，显示返回最终排名按钮
+  const backBtn = document.getElementById('back-to-final-btn');
+  if (backBtn) backBtn.style.display = (d.phase === 'final' && isViewingHistory) ? 'block' : 'none';
 }
 
 window.applyAdjustments = async function () {
@@ -1983,9 +2076,26 @@ window.applyAdjustments = async function () {
 window.nextRound = async function () {
   const d = await dbGet(myRoom);
   d.round = d.lastRound + 1; d.phase = 'deploy'; d.deploys = {}; d.lockedAt = null;
+  viewingRound = null; // 重置查看的历史轮次
   await dbSet(myRoom, d);
 };
 window.showFinal = async function () { const d = await dbGet(myRoom); d.phase = 'final'; await dbSet(myRoom, d); };
+
+// 从最终页面回看历史轮次（不改变实际 phase，仅本地切换屏幕）
+window.viewHistoryFromFinal = async function () {
+  const d = await dbGet(myRoom);
+  if (!d?.history || !Object.keys(d.history).length) { toast('暂无历史记录'); return; }
+  // 默认查看第1轮
+  viewingRound = Math.min(...Object.keys(d.history).map(Number));
+  renderResult(d);
+};
+
+// 从历史回看页面返回最终排名
+window.backToFinal = async function () {
+  viewingRound = null;
+  const d = await dbGet(myRoom);
+  if (d?.phase === 'final') renderFinal(d);
+};
 
 function renderFinal(d) {
   showScreen('final');
