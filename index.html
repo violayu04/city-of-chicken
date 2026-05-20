@@ -1219,6 +1219,8 @@ window.submitDeploy = async function () {
   const isYY = yyEff && (yyEff.target === myId || yyEff.player === myId);
   const maxArmy = isYY ? 17 : 12 + (myDep.dapanExtra || 0);
   const total = dd.slice(1).reduce((a, b) => a + b, 0);
+  const overLimitCity = dd.slice(1).findIndex(v => v > 12);
+  if (overLimitCity >= 0) { toast(`${overLimitCity + 1}号城单人最多放12兵`); return; }
   if (Math.abs(total - maxArmy) > 0.01) { toast(`军队总数必须=${maxArmy}（当前${total}）`); return; }
   if (!d.deploys) d.deploys = {};
   if (!d.deploys[myId]) d.deploys[myId] = {};
@@ -1430,6 +1432,8 @@ function markNongjiTargetPeeked(d) {
 
 window.submitNongjiRedeploy = async function () {
   const total = nongjiRedeployData.slice(1).reduce((a, b) => a + b, 0);
+  const overLimitCity = nongjiRedeployData.slice(1).findIndex(v => v > 12);
+  if (overLimitCity >= 0) { toast(`${overLimitCity + 1}号城单人最多放12兵`); return; }
   if (Math.abs(total - 12) > 0.01) { toast(`军队总数必须=12（当前${total}）`); return; }
 
   const d = await dbGet(myRoom);
@@ -1615,14 +1619,22 @@ async function calcResult(data) {
     });
   }
 
-  // 鸳鸯鸡同城合计>12归0（基于原始部署判断，不是辣子鸡修改后）
+  // 鸳鸯鸡同城合计>12：双方该城归0，且该城双方完全不能得分/参与胜负判定。
+  // 注意：这里用原始部署判断是否超限；即使后续显示为0，也要额外记录 invalid，避免被当作0兵并列或参与平分来源。
+  const yyInvalidCities = {};
+  players.forEach(p => { yyInvalidCities[p.id] = new Set(); });
   if (yyEff) {
     const p1 = yyEff.player, p2 = yyEff.target;
     const t1Raw = deploys[p1]?.troops || Array(16).fill(0);
     const t2Raw = deploys[p2]?.troops || Array(16).fill(0);
     for (let c = 0; c < 16; c++) {
       const sum = (t1Raw[c] || 0) + (t2Raw[c] || 0);
-      if (sum > 12) { effectiveTroops[p1][c] = 0; effectiveTroops[p2][c] = 0; }
+      if (sum > 12) {
+        effectiveTroops[p1][c] = 0;
+        effectiveTroops[p2][c] = 0;
+        yyInvalidCities[p1].add(c + 1);
+        yyInvalidCities[p2].add(c + 1);
+      }
     }
   }
 
@@ -1654,7 +1666,8 @@ async function calcResult(data) {
     const rawTroops = {};
     players.forEach(p => {
       troops[p.id] = effectiveTroops[p.id][c - 1] || 0;
-      rawTroops[p.id] = deploys[p.id]?.troops?.[c - 1] || 0;
+      // 鸳鸯鸡超限城池：虽然原始放过兵，但该城视为无效部署，不能参与赢家判定。
+      rawTroops[p.id] = yyInvalidCities[p.id]?.has(c) ? 0 : (deploys[p.id]?.troops?.[c - 1] || 0);
     });
     const noneDeployed = Object.values(rawTroops).every(v => v === 0);
     if (noneDeployed) { cityWinners[c] = { winner: null, max: 0, troops }; continue; }
@@ -1685,6 +1698,13 @@ async function calcResult(data) {
     skillLog.push(`炸鸡桶：${fresh.players[zhajiEff.playerId]?.name} 在 ${zhajiCity}号城 投炸鸡，摧毁 ${destroyed} 兵，获 ${destroyed} 分`);
   }
   if (keleSwap) skillLog.push(`可乐鸡翅：${fresh.players[keleSwap.playerId]?.name} 调换了 ${keleSwap.c1}号城↔${keleSwap.c2}号城的价值`);
+  if (yyEff) {
+    const p1 = yyEff.player, p2 = yyEff.target;
+    const badCities = [...(yyInvalidCities[p1] || new Set())];
+    if (badCities.length) {
+      skillLog.push(`鸳鸯鸡：${fresh.players[p1]?.name} 与 ${fresh.players[p2]?.name} 在 ${badCities.join('、')}号城合计超过12兵，该城双方归0且不得分`);
+    }
+  }
 
   // 黄焖鸡（如果选的城被炸鸡桶炸了，技能无效，整城消失）
   if (hmCity !== null && hmCity !== zhajiCity) {
@@ -1703,6 +1723,7 @@ async function calcResult(data) {
       // 这样被辣子鸡从 3 扣到 0、从 2 扣到 -1 的玩家仍然算参与；
       // 完全没放兵的人不会被误扣分。
       const originalTroops = deploys[p.id]?.troops?.[hmCity - 1] || 0;
+      // 鸳鸯鸡超限清零仍算“原本参与但失败”，所以黄焖鸡可正常扣分；口水鸡仍会返还。
       if (originalTroops > 0 && !cityWon[p.id].has(hmCity)) {
         roundScores[p.id] -= penalty;
         skillLog.push(`  → ${p.name} 在 ${hmCity}号城有放兵但未得分，扣 ${penalty} 分`);
