@@ -385,18 +385,18 @@ function loadSession() { try { return JSON.parse(localStorage.getItem('cc_s') ||
 window.clearAndHome = function () { localStorage.removeItem('cc_s'); location.reload(); };
 
 const ROLES = [
-  { id: 1, name: "辣子鸡丁", skill: "火辣袭击（1次）：本轮所有放兵城池，其他玩家军队-3" },
-  { id: 2, name: "炸鸡桶", skill: "炸鸡（前4轮1次）：摧毁目标城所有兵，获等同兵数的分" },
-  { id: 3, name: "可乐鸡翅", skill: "甜咸互换（3次，5/6轮1次）：秘密调换两城价值，差≤6" },
-  { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人提交后，可看一名玩家放置再重新决定" },
-  { id: 5, name: "左宗鸡", skill: "倒数加餐（手动调分）：选一玩家，若其本轮累计最低三名之一，主持人为你+10分" },
-  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，该城有放兵但未得分者扣原始分" },
-  { id: 7, name: "鸳鸯鸡", skill: "口味双拼（3次，5/6轮1次）：强制合作，各放17兵，同城合计≤12，收益平分" },
-  { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若本轮累计唯一最低，偷所有人各2分" },
-  { id: 9, name: "大盘鸡", skill: "加量吃撑（3次，5/6轮1次）：额外最多12兵，未得分兵每个-2" },
-  { id: 10, name: "酱油鸡", skill: "放点酱油（3次，5/6轮1次）：结算前可移动1枚自己的兵" },
-  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦（手动调分）：预测累计排名，主持人按猜对人数为你+2分/人" },
-  { id: 12, name: "口水鸡", skill: "半块添香：军队可按0.5使用" }
+  { id: 1, name: "辣子鸡丁", skill: "火辣袭击：你的技能只能使用一次：本轮所有和你放在同一格的其他军队数量-3。" },
+  { id: 2, name: "炸鸡桶", skill: "一桶炸翻天：你有一个强力且只能在前四轮使用一次的“炸鸡”。可以将炸鸡置在任意城池中。该城池所有的士兵将被炸鸡摧毁，你将获得摧毁士兵相同的分数。" },
+  { id: 3, name: "可乐鸡翅", skill: "甜咸互换：可以使用三次。秘密调换两个城池的实际价值，两个城池的差值不能超过6，第五轮或第六轮只能使用一次。" },
+  { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：当所有人除了你都选择完后，你可以选择一名玩家，查看其放置，之后立即决定你的放置。不可以选择同一个玩家。" },
+  { id: 5, name: "左宗鸡", skill: "甜辣美味：可以用三次，选择一名角色+10分。不可以选择自己。第五轮或第六轮只能使用一次。" },
+  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味：可以用三次。秘密选择一个城池，本城池胜利所得的分数翻倍，但是在此城池失败将扣除对应的分数。第五轮或第六轮只能使用一次。" },
+  { id: 7, name: "鸳鸯鸡", skill: "口味双拼：可以用三次。可以和一名玩家合作（不能合作一样的玩家），合作玩家本轮不能使用技能。每个人可以放置17个军队但每个城池不能超过12，本轮所有收益平分，技能释放为公开。第五轮或第六轮只能使用一次。" },
+  { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若你的分数在某一轮为总榜唯一最低，你立即偷取所有人两分。" },
+  { id: 9, name: "大盘鸡", skill: "加量吃撑：可以用三次。你可以额外获得X个军队（最多为12）且不可在同一个城池放入超过12军队。本轮每个没让你获得分数的军队会令你失去两分，第五轮或第六轮为四分。第五轮或第六轮只能使用一次。" },
+  { id: 10, name: "酱油鸡", skill: "放点酱油：公布结果时，计算分数前，你可以选择释放技能。若选择，你可以移动一枚你的军队。可以用三次，第五轮或第六轮只能使用一次。" },
+  { id: 11, name: "白斩鸡拼盘", skill: "切准肥瘦：每轮结束时，预测所有人的总榜得分排名（累计）。每预测对一个人，你加1.5分，不受得分翻倍加成。" },
+  { id: 12, name: "口水鸡", skill: "半块添香：你的军队可以分成0.5使用，当你因其他玩家的技能失去分数时，你立即获得相同分数。" }
 ];
 const COLORS = ["#c9a84c","#4c7ec9","#c94c4c","#4caa7c","#9f6bc9","#c97e4c","#4cbcc9","#c94c8a","#7ec94c","#c9c94c","#4c4cc9","#888888"];
 
@@ -1291,6 +1291,10 @@ async function calcResult(data) {
       if (originalTroops > 0 && !cityWon[p.id].has(hmCity)) {
         roundScores[p.id] -= penalty;
         skillLog.push(`  → ${p.name} 在 ${hmCity}号城有放兵但未得分，扣 ${penalty} 分`);
+        if (p.roleId === 12 && hmEff.playerId !== p.id) {
+          roundScores[p.id] += penalty;
+          skillLog.push(`  → 口水鸡·半块添香：${p.name} 因其他玩家技能失去 ${penalty} 分，立即获得 ${penalty} 分`);
+        }
       }
     });
   } else if (hmCity !== null && hmCity === zhajiCity) {
@@ -1304,8 +1308,9 @@ async function calcResult(data) {
     const troops = effectiveTroops[p.id] || [];
     let wasted = 0;
     troops.forEach((t, i) => { if (!cityWon[p.id].has(i + 1)) wasted += t; });
-    const penalty = wasted * 2;
-    if (penalty > 0) { roundScores[p.id] -= penalty; skillLog.push(`大盘鸡：${p.name} 未得分兵 ${wasted} 个，扣 ${penalty} 分`); }
+    const lossPerTroop = isDouble ? 4 : 2;
+    const penalty = wasted * lossPerTroop;
+    if (penalty > 0) { roundScores[p.id] -= penalty; skillLog.push(`大盘鸡：${p.name} 未得分兵 ${wasted} 个，每个扣 ${lossPerTroop} 分，共扣 ${penalty} 分`); }
   });
 
   // 鸳鸯鸡收益平分（所有技能效果之后，白斩/左宗/泡椒之前）
@@ -1340,6 +1345,10 @@ async function calcResult(data) {
       if (p.id !== paojiaoPlayer.id) {
         roundScores[p.id] -= 2;
         roundScores[paojiaoPlayer.id] += 2;
+        if (p.roleId === 12) {
+          roundScores[p.id] += 2;
+          skillLog.push(`  → 口水鸡·半块添香：${p.name} 因泡椒鸡爪失去 2 分，立即获得 2 分`);
+        }
       }
     });
   }
