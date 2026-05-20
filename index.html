@@ -396,6 +396,21 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 async function dbSet(code, data) { await sb.from('rooms').upsert({ code, data: JSON.stringify(data), updated_at: new Date().toISOString() }); }
 async function dbGet(code) { const { data } = await sb.from('rooms').select('data').eq('code', code).single(); return data ? JSON.parse(data.data) : null; }
+
+// 安全地只更新某玩家的 deploys[pid]，自动重试以避免竞态覆盖
+async function dbPatchDeploy(code, pid, patch, retries = 5) {
+  for (let i = 0; i < retries; i++) {
+    const d = await dbGet(code);
+    if (!d) return;
+    if (!d.deploys) d.deploys = {};
+    if (!d.deploys[pid]) d.deploys[pid] = {};
+    Object.assign(d.deploys[pid], patch);
+    const { error } = await sb.from('rooms').update({ data: JSON.stringify(d), updated_at: new Date().toISOString() }).eq('code', code);
+    if (!error) return; // 成功
+    // 失败则重试（通常是网络抖动，极少是真正的写冲突）
+    await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+  }
+}
 let rtCh = null;
 function listenDB(code, cb) {
   if (rtCh) sb.removeChannel(rtCh);
@@ -713,7 +728,18 @@ function renderDeploy(d) {
   currentMaxArmy = armyMax;
 
   if (myDep.troops) currentDeployData[round] = [0, ...myDep.troops];
-  else if (myDep.yuanyangBoundReset) currentDeployData[round] = Array(17).fill(0);
+  else if (myDep.yuanyangBoundReset) {
+    currentDeployData[round] = Array(17).fill(0);
+    // 强制重建输入框（maxArmy 变了），并只清零一次，避免后续 renderDeploy 反复清零用户输入
+    const grid = document.getElementById('city-grid');
+    if (grid) delete grid.dataset.builtRound;
+    dbGet(myRoom).then(latest => {
+      if (latest?.deploys?.[myId]?.yuanyangBoundReset) {
+        delete latest.deploys[myId].yuanyangBoundReset;
+        dbSet(myRoom, latest);
+      }
+    });
+  }
 
   document.getElementById('deploy-form').style.display = 'block';
   document.getElementById('nongji-peek-phase').style.display = 'none';
@@ -738,11 +764,24 @@ function buildCityGrid(round, maxArmy, isYuanyangPartner) {
   const isDouble = round >= 5;
   const allowHalf = myRole?.id === 12 && !isYuanyangPartner;
   if (!currentDeployData[round]) currentDeployData[round] = Array(17).fill(0);
-  const grid = document.getElementById('city-grid'); grid.innerHTML = '';
+  const grid = document.getElementById('city-grid');
+  // 如果已经为本轮构建过输入框，不重建（避免打断用户输入/清零正在填的数字）
+  if (grid.dataset.builtRound === String(round)) {
+    // 只同步 value（如果 currentDeployData 有数据）
+    for (let c = 1; c <= 16; c++) {
+      const inp = grid.querySelector(`input[data-city="${c}"]`);
+      if (inp && document.activeElement !== inp) {
+        inp.value = currentDeployData[round][c] || '';
+      }
+    }
+    return;
+  }
+  grid.dataset.builtRound = String(round);
+  grid.innerHTML = '';
   for (let c = 1; c <= 16; c++) {
     const cell = document.createElement('div'); cell.className = 'city-cell';
     cell.innerHTML = `<div class="city-num">${c}号${isDouble ? '<div class="city-double">×2</div>' : ''}</div>
-      <input type="number" min="0" max="12" step="${allowHalf ? 0.5 : 1}" value="${currentDeployData[round][c] || ''}" placeholder="0" oninput="updateDeploy(${round},${c},this.value)" />`;
+      <input type="number" min="0" max="12" step="${allowHalf ? 0.5 : 1}" data-city="${c}" value="${currentDeployData[round][c] || ''}" placeholder="0" oninput="updateDeploy(${round},${c},this.value)" />`;
     grid.appendChild(cell);
   }
   updateArmyBar(round, maxArmy, 'army-fill', 'army-count');
