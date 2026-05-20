@@ -759,6 +759,10 @@ function buildSkillSections(d) {
   const playerOpts = (exclude, selected = '') => allPlayers(d)
     .filter(p => p.id !== exclude)
     .map(p => `<option value="${p.id}" ${selected === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+  const yuanyangPastPartners = d.skillState?.yuanyangPairs?.[myId] || [];
+  const yuanyangOpts = allPlayers(d)
+    .filter(p => p.id !== myId && !yuanyangPastPartners.includes(p.id))
+    .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
   const showStatus = (id, text) => {
     const card = document.querySelector(`#${id}-section .skill-card-desc`);
@@ -821,10 +825,14 @@ function buildSkillSections(d) {
 
   if (myRole?.id === 7 && !hasYuanyangLocked) {
     const left = usesLeft(d, 'yuanyang', 3, 1);
-    if (left > 0) {
+    if (left > 0 && yuanyangOpts) {
       document.getElementById('yuanyang-section').style.display = 'block';
       document.getElementById('yuanyang-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
-      document.getElementById('yuanyang-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
+      document.getElementById('yuanyang-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + yuanyangOpts;
+    } else if (left > 0 && !yuanyangOpts) {
+      document.getElementById('yuanyang-section').style.display = 'block';
+      document.getElementById('yuanyang-uses').textContent = '没有可合作的新玩家';
+      document.getElementById('yuanyang-target').innerHTML = `<option value="">-- 已没有可合作的新玩家 --</option>`;
     }
   }
 
@@ -1115,6 +1123,23 @@ window.skipHuangmen = async function () {
   toast('已取消/不使用双倍滋味');
 };
 
+function hasYuanyangPartnered(d, a, b) {
+  const pairs = d.skillState?.yuanyangPairs || {};
+  return (pairs[a] || []).includes(b) || (pairs[b] || []).includes(a);
+}
+
+function recordYuanyangPair(d, a, b) {
+  if (!d.skillState) d.skillState = {};
+  if (!d.skillState.yuanyangPairs) d.skillState.yuanyangPairs = {};
+  const add = (x, y) => {
+    const arr = d.skillState.yuanyangPairs[x] || [];
+    if (!arr.includes(y)) arr.push(y);
+    d.skillState.yuanyangPairs[x] = arr;
+  };
+  add(a, b);
+  add(b, a);
+}
+
 window.submitYuanyang = async function () {
   const target = document.getElementById('yuanyang-target').value;
   if (!target) { toast('请选择合作玩家'); return; }
@@ -1125,12 +1150,17 @@ window.submitYuanyang = async function () {
     toast('本轮鸳鸯鸡绑定已经确定，不能更改');
     return;
   }
+  if (hasYuanyangPartnered(d, myId, target)) {
+    toast('不能再次合作同一个玩家');
+    return;
+  }
 
   // 鸳鸯鸡公开绑定后，双方本轮不能使用其他技能；若之前已经用过，撤销效果并返还次数。
   cancelPlayerRoundSkills(d, myId, 'yuanyang');
   cancelPlayerRoundSkills(d, target, 'yuanyang');
 
   d.skillEffects[`yuanyang_r${d.round}`] = { player: myId, target, locked: true };
+  recordYuanyangPair(d, myId, target);
   const st = d.skillState || {};
   st.yuanyang_used = (st.yuanyang_used || 0) + 1;
   if (d.round >= 5) st.yuanyang_usedDouble = (st.yuanyang_usedDouble || 0) + 1;
