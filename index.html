@@ -1738,13 +1738,44 @@ async function calcResult(data) {
     } else {
       skillLog.push(`黄焖鸡米饭：${fresh.players[hmEff.playerId]?.name} 选 ${hmCity}号城（流局）`);
     }
+    // 鸳鸯鸡视为一体：判断"是否有人出兵且没赢"，若是只扣1次（记在 player 上），跳过 target
+    const yyHmSkip = new Set();
+    let yyHmCharge = false; // 是否需要给鸳鸯鸡组合扣一次
+    if (yyEff) {
+      const p1 = yyEff.player, p2 = yyEff.target;
+      const t1 = yyInvalidCities[p1]?.has(hmCity) ? 0 : (deploys[p1]?.troops?.[hmCity - 1] || 0);
+      const t2 = yyInvalidCities[p2]?.has(hmCity) ? 0 : (deploys[p2]?.troops?.[hmCity - 1] || 0);
+      if ((t1 > 0 || t2 > 0) && !cityWon[p1].has(hmCity)) {
+        yyHmCharge = true;
+      }
+      // 双方都跳过普通循环，避免按各自情况重复或漏扣
+      yyHmSkip.add(p1);
+      yyHmSkip.add(p2);
+    }
+    // 给鸳鸯鸡组合记一次扣分（挂在 player 上，平分时均摊）
+    if (yyHmCharge) {
+      const p1 = yyEff.player;
+      const p1Player = players.find(p => p.id === p1);
+      roundScores[p1] -= penalty;
+      const p1n = fresh.players[p1]?.name, p2n = fresh.players[yyEff.target]?.name;
+      skillLog.push(`  → ${p1n} & ${p2n}（鸳鸯鸡合作）在 ${hmCity}号城有放兵但未得分，合计扣 ${penalty} 分（平分时均摊）`);
+      // 口水鸡·半块添香：若鸳鸯鸡任一方是口水鸡（且不是黄焖鸡发动者），返还
+      if (p1Player?.roleId === 12 && hmEff.playerId !== p1) {
+        roundScores[p1] += penalty;
+        skillLog.push(`  → 口水鸡·半块添香：${p1n} 因其他玩家技能失去 ${penalty} 分，立即获得 ${penalty} 分`);
+      } else {
+        const p2Player = players.find(p => p.id === yyEff.target);
+        if (p2Player?.roleId === 12 && hmEff.playerId !== yyEff.target) {
+          roundScores[p1] += penalty;
+          skillLog.push(`  → 口水鸡·半块添香：${p2n} 因其他玩家技能失去 ${penalty} 分，立即获得 ${penalty} 分`);
+        }
+      }
+    }
     players.forEach(p => {
-      // 黄焖鸡只惩罚“该城原始部署过兵、但没有得分”的玩家。
-      // 这里必须看 deploys 原始兵力，而不是 effectiveTroops：
-      // 这样被辣子鸡从 3 扣到 0、从 2 扣到 -1 的玩家仍然算参与；
-      // 完全没放兵的人不会被误扣分。
+      if (yyHmSkip.has(p.id)) return;
+      // 黄焖鸡只惩罚"该城原始部署过兵、但没有得分"的玩家。
       const originalTroops = yyInvalidCities[p.id]?.has(hmCity) ? 0 : (deploys[p.id]?.troops?.[hmCity - 1] || 0);
-      // 鸳鸯鸡双方同城合计超过12时，该城对双方视为“没有出兵”，因此不吃黄焖鸡失败/流局扣分。
+      // 鸳鸯鸡双方同城合计超过12时，该城对双方视为"没有出兵"，因此不吃黄焖鸡失败/流局扣分。
       if (originalTroops > 0 && !cityWon[p.id].has(hmCity)) {
         roundScores[p.id] -= penalty;
         skillLog.push(`  → ${p.name} 在 ${hmCity}号城有放兵但未得分，扣 ${penalty} 分`);
