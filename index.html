@@ -1669,11 +1669,25 @@ async function calcResult(data) {
       // 鸳鸯鸡超限城池：虽然原始放过兵，但该城视为无效部署，不能参与赢家判定。
       rawTroops[p.id] = yyInvalidCities[p.id]?.has(c) ? 0 : (deploys[p.id]?.troops?.[c - 1] || 0);
     });
+
+    // 鸳鸯鸡：合并双方兵力为一个虚拟参与者参与胜负比较。
+    // 将 target 的兵力合入 player，并将 target 从参赛中剔除，以避免双方互相撞车。
+    if (yyEff && !yyInvalidCities[yyEff.player]?.has(c)) {
+      const p1 = yyEff.player, p2 = yyEff.target;
+      troops[p1] = (troops[p1] || 0) + (troops[p2] || 0);
+      rawTroops[p1] = (rawTroops[p1] || 0) + (rawTroops[p2] || 0);
+      // 将 p2 排除在外，避免用独立兵力参与比较
+      delete troops[p2];
+      delete rawTroops[p2];
+    }
+
     const noneDeployed = Object.values(rawTroops).every(v => v === 0);
     if (noneDeployed) { cityWinners[c] = { winner: null, max: 0, troops }; continue; }
     const winner = findWinner(troops, rawTroops);
+    // 如果鸳鸯鸡的代表（player）赢了，该城也视为 target 赢得（cityWon 两人同步）
+    const yyWon = yyEff && winner === yyEff.player;
     const winVal = winner ? troops[winner] : null;
-    cityWinners[c] = { winner, max: winVal, troops };
+    cityWinners[c] = { winner, max: winVal, troops, yyWon, yyTarget: yyEff?.target };
   }
 
   // 基础得分
@@ -1684,7 +1698,14 @@ async function calcResult(data) {
 
   for (let c = 1; c <= 16; c++) {
     const w = cityWinners[c].winner;
-    if (w) { roundScores[w] += isDouble ? cityVal[c] * 2 : cityVal[c]; cityWon[w].add(c); }
+    if (w) {
+      roundScores[w] += isDouble ? cityVal[c] * 2 : cityVal[c];
+      cityWon[w].add(c);
+      // 鸳鸯鸡：双方视为同时赢得该城（用于黄焖鸡/大盘鸡判断）
+      if (cityWinners[c].yyWon && cityWinners[c].yyTarget) {
+        cityWon[cityWinners[c].yyTarget].add(c);
+      }
+    }
   }
 
   // 炸鸡桶加分
@@ -1845,7 +1866,19 @@ function renderResult(d) {
     if (keleSwap && (c === keleSwap.c1 || c === keleSwap.c2)) html += ` <span style="color:var(--gold);font-size:9px">↔${baseVal}</span>`;
     html += ` +${pts}</div>`;
     if (isBombed) html += `<div class="city-tie">💥炸了</div>`;
-    else if (winner) { const p = players.find(p => p.id === winner); html += `<div class="city-winner" style="color:${p ? p.color : 'var(--gold)'}">${p ? p.name : '?'}</div>`; }
+    else if (winner) {
+      const yyEffR = effects[`yuanyang_r${round}`];
+      const isYyWin = yyEffR && winner === yyEffR.player;
+      if (isYyWin) {
+        const p1 = players.find(p => p.id === yyEffR.player);
+        const p2 = players.find(p => p.id === yyEffR.target);
+        html += `<div class="city-winner" style="color:var(--gold)">${p1 ? p1.name : '?'} & ${p2 ? p2.name : '?'}</div>`;
+        if (winnerPlayer) { cell.style.borderColor = 'var(--gold)'; cell.style.background = 'rgba(201,168,76,0.08)'; }
+      } else {
+        const p = players.find(p => p.id === winner);
+        html += `<div class="city-winner" style="color:${p ? p.color : 'var(--gold)'}">${p ? p.name : '?'}</div>`;
+      }
+    }
     else html += `<div class="city-tie">流局</div>`;
     if (isHM) html += `<div class="city-tag">黄焖鸡</div>`;
     // troop detail popup on click
