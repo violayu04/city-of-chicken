@@ -739,16 +739,21 @@ window.skipKele = async function () { await patchDeploy({ keleDone: true }); doc
 window.submitNongji = async function () {
   const target = document.getElementById('nongji-target').value;
   if (!target) { toast('请选择玩家'); return; }
+
   const d = await dbGet(myRoom);
   const peeked = d.skillState?.nongji_peeked || [];
   if (peeked.includes(target)) { toast('这个玩家已经看过了'); return; }
+
+  if (!d.skillEffects) d.skillEffects = {};
   d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
-  if (!d.skillState) d.skillState = {};
-  d.skillState.nongji_peeked = [...peeked, target];
-  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+
+  if (!d.deploys) d.deploys = {};
+  if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].nongjiDone = true;
+
   await dbSet(myRoom, d);
-  document.getElementById('nongji-section').style.display = 'none'; toast('鸡汤慢炖：将在所有人提交后查看 ✓');
+  document.getElementById('nongji-section').style.display = 'none';
+  toast('鸡汤慢炖：将在所有人提交后查看 ✓');
 };
 window.skipNongji = async function () { await patchDeploy({ nongjiDone: true }); document.getElementById('nongji-section').style.display = 'none'; };
 
@@ -839,11 +844,20 @@ async function checkAfterSubmit(oldData) {
   const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
   const yyBound = yy ? [yy.player, yy.target] : [];
 
-  // check nongji（浓鸡汤玩家在场且还有可看的人才触发）
+  // check nongji（选目标不等于已查看；只有看完/保持原部署后才写入 nongji_peeked）
   const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
+  const nongjiEff = fresh.skillEffects?.[`nongji_r${fresh.round}`];
   const nongjiPeeked = fresh.skillState?.nongji_peeked || [];
-  const availableTargets = allPlayers(fresh).filter(p => p.id !== nongjiPlayer?.id && !nongjiPeeked.includes(p.id));
-  if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && availableTargets.length > 0 && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
+  const availableTargets = allPlayers(fresh).filter(
+    p => p.id !== nongjiPlayer?.id && !nongjiPeeked.includes(p.id)
+  );
+  if (
+    nongjiPlayer &&
+    !yyBound.includes(nongjiPlayer.id) &&
+    (nongjiEff?.target || availableTargets.length > 0) &&
+    !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped &&
+    !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone
+  ) {
     fresh.phase = 'nongji_peek';
     await dbSet(myRoom, fresh);
     onRoomUpdate(fresh); return;
@@ -949,17 +963,15 @@ function renderNongjiPeek(d) {
 window.submitNongjiLate = async function () {
   const target = document.getElementById('nongji-target-late').value;
   if (!target) { toast('请选择玩家'); return; }
+
   const d = await dbGet(myRoom);
   const peeked = d.skillState?.nongji_peeked || [];
   if (peeked.includes(target)) { toast('这个玩家已经看过了'); return; }
+
   if (!d.skillEffects) d.skillEffects = {};
   d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
-  // 标记已看
-  if (!d.skillState) d.skillState = {};
-  d.skillState.nongji_peeked = [...peeked, target];
   await dbSet(myRoom, d);
 };
-
 window.skipNongjiLate = async function () {
   const d = await dbGet(myRoom);
   if (!d.deploys) d.deploys = {};
@@ -990,24 +1002,45 @@ function updateNongjiBar() {
   el.className = 'army-count' + (total > 12 ? ' army-warn' : '');
 }
 
+function markNongjiTargetPeeked(d) {
+  if (!d.skillState) d.skillState = {};
+  const eff = d.skillEffects?.[`nongji_r${d.round}`];
+  if (eff?.target) {
+    const peeked = d.skillState.nongji_peeked || [];
+    if (!peeked.includes(eff.target)) {
+      d.skillState.nongji_peeked = [...peeked, eff.target];
+    }
+  }
+}
+
 window.submitNongjiRedeploy = async function () {
   const total = nongjiRedeployData.slice(1).reduce((a, b) => a + b, 0);
   if (Math.abs(total - 12) > 0.01) { toast(`军队总数必须=12（当前${total}）`); return; }
+
   const d = await dbGet(myRoom);
+  if (!d.deploys) d.deploys = {};
+  if (!d.deploys[myId]) d.deploys[myId] = {};
+
+  markNongjiTargetPeeked(d);
   d.deploys[myId].troops = nongjiRedeployData.slice(1);
   d.deploys[myId].nongjiRedeployDone = true;
-  await dbSet(myRoom, d); toast('重新部署完成 ✓');
+
+  await dbSet(myRoom, d);
+  toast('重新部署完成 ✓');
   checkAfterNongji(d);
 };
 window.skipNongjiRedeploy = async function () {
   const d = await dbGet(myRoom);
   if (!d.deploys) d.deploys = {};
   if (!d.deploys[myId]) d.deploys[myId] = {};
+
+  markNongjiTargetPeeked(d);
   d.deploys[myId].nongjiRedeployDone = true;
-  await dbSet(myRoom, d); toast('保持原部署');
+
+  await dbSet(myRoom, d);
+  toast('保持原部署');
   checkAfterNongji(d);
 };
-
 async function checkAfterNongji(d) {
   const fresh = await dbGet(myRoom);
   if (fresh.phase !== 'nongji_peek') return;
