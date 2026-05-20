@@ -843,25 +843,18 @@ async function checkAfterSubmit(oldData) {
   const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
   const nongjiPeeked = fresh.skillState?.nongji_peeked || [];
   const availableTargets = allPlayers(fresh).filter(p => p.id !== nongjiPlayer?.id && !nongjiPeeked.includes(p.id));
-  console.log('nongji check:', {
-    hasNongjiPlayer: !!nongjiPlayer,
-    nongjiPlayerName: nongjiPlayer?.name,
-    yyBlocked: nongjiPlayer && yyBound.includes(nongjiPlayer.id),
-    peekedCount: nongjiPeeked.length,
-    availableCount: availableTargets.length,
-    skipped: fresh.deploys[nongjiPlayer?.id]?.nongjiSkipped,
-    done: fresh.deploys[nongjiPlayer?.id]?.nongjiRedeployDone
-  });
   if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && availableTargets.length > 0 && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
     fresh.phase = 'nongji_peek';
-    await dbSet(myRoom, fresh); return;
+    await dbSet(myRoom, fresh);
+    onRoomUpdate(fresh); return;
   }
   // check jiangyou
   const jyPlayer = allPlayers(fresh).find(p => p.roleId === 10);
   const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
   if (jyPlayer && !yyBound.includes(jyPlayer.id) && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
     fresh.phase = 'jiangyou_move';
-    await dbSet(myRoom, fresh); return;
+    await dbSet(myRoom, fresh);
+    onRoomUpdate(fresh); return;
   }
   calcResult(fresh);
 }
@@ -1030,7 +1023,8 @@ async function checkAfterNongji(d) {
   const jyLeft = usesLeft(fresh, 'jiangyou', 3, 1);
   if (jyPlayer && !yyBound.includes(jyPlayer.id) && jyLeft > 0 && !fresh.deploys[jyPlayer.id]?.jiangyouDone) {
     fresh.phase = 'jiangyou_move';
-    await dbSet(myRoom, fresh); return;
+    await dbSet(myRoom, fresh);
+    onRoomUpdate(fresh); return;
   }
   calcResult(fresh);
 }
