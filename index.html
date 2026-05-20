@@ -230,7 +230,7 @@ input[type=checkbox]{width:auto;padding:0}
     <div id="huangmen-section" style="display:none">
       <div class="skill-card">
         <div class="skill-card-title">双倍滋味 · 秘密选择一个城池</div>
-        <div class="skill-card-desc">该城赢家得分翻倍；所有未得分玩家扣该城原始分（5/6轮扣分也×2）。流局同样全员扣分。3次限制，5/6轮只能用1次。</div>
+        <div class="skill-card-desc">该城赢家得分翻倍；该城有放兵但未得分的玩家扣该城原始分（5/6轮扣分也×2）。流局时该城有放兵的玩家扣分。3次限制，5/6轮只能用1次。</div>
         <div class="uses-left" id="huangmen-uses"></div>
         <select id="huangmen-city" style="margin-bottom:8px"></select>
         <button class="btn btn-gold" style="width:100%" onclick="submitHuangmen()">使用技能</button>
@@ -390,7 +390,7 @@ const ROLES = [
   { id: 3, name: "可乐鸡翅", skill: "甜咸互换（3次，5/6轮1次）：秘密调换两城价值，差≤6" },
   { id: 4, name: "浓鸡汤", skill: "鸡汤慢炖：所有人提交后，可看一名玩家放置再重新决定" },
   { id: 5, name: "左宗鸡", skill: "倒数加餐（手动调分）：选一玩家，若其本轮累计最低三名之一，主持人为你+10分" },
-  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，未得分者扣原始分" },
+  { id: 6, name: "黄焖鸡米饭", skill: "双倍滋味（3次，5/6轮1次）：选城赢家翻倍，该城有放兵但未得分者扣原始分" },
   { id: 7, name: "鸳鸯鸡", skill: "口味双拼（3次，5/6轮1次）：强制合作，各放17兵，同城合计≤12，收益平分" },
   { id: 8, name: "泡椒鸡爪", skill: "偷点零食：若本轮累计唯一最低，偷所有人各2分" },
   { id: 9, name: "大盘鸡", skill: "加量吃撑（3次，5/6轮1次）：额外最多12兵，未得分兵每个-2" },
@@ -1283,9 +1283,14 @@ async function calcResult(data) {
       skillLog.push(`黄焖鸡米饭：${fresh.players[hmEff.playerId]?.name} 选 ${hmCity}号城（流局）`);
     }
     players.forEach(p => {
-      if (!cityWon[p.id].has(hmCity)) {
+      // 黄焖鸡只惩罚“该城原始部署过兵、但没有得分”的玩家。
+      // 这里必须看 deploys 原始兵力，而不是 effectiveTroops：
+      // 这样被辣子鸡从 3 扣到 0、从 2 扣到 -1 的玩家仍然算参与；
+      // 完全没放兵的人不会被误扣分。
+      const originalTroops = deploys[p.id]?.troops?.[hmCity - 1] || 0;
+      if (originalTroops > 0 && !cityWon[p.id].has(hmCity)) {
         roundScores[p.id] -= penalty;
-        skillLog.push(`  → ${p.name} 扣 ${penalty} 分`);
+        skillLog.push(`  → ${p.name} 在 ${hmCity}号城有放兵但未得分，扣 ${penalty} 分`);
       }
     });
   } else if (hmCity !== null && hmCity === zhajiCity) {
