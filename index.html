@@ -407,16 +407,24 @@ let nongjiRedeployData = [];
 function toast(msg, dur = 2500) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), dur); }
 function showScreen(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById('screen-' + id).classList.add('active'); }
 function genCode() { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; return Array.from({ length: 4 }, () => c[Math.floor(Math.random() * c.length)]).join(''); }
-function otherPlayers(d) { return Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p })).filter(p => p.id !== myId); }
-function allPlayers(d) { return Object.entries(d.players || {}).map(([id, p]) => ({ id, ...p })); }
+function allPlayers(d) {
+  return Object.entries(d.players || {})
+    .map(([id, p]) => ({ id, ...p }))
+    .filter(p => p.id !== d.host && !p.isHost);
+}
+function otherPlayers(d) { return allPlayers(d).filter(p => p.id !== myId); }
 
 // Auto reconnect
 (async () => {
   const s = loadSession(); if (!s) return;
   const d = await dbGet(s.myRoom);
-  if (!d || !d.players || !d.players[s.myId]) return;
-  const role = ROLES.find(r => r.id === d.players[s.myId].roleId);
-  document.getElementById('reconnect-info').textContent = `房间 ${s.myRoom} · ${s.myName}（${role ? role.name : '未分配'}）· 第${d.round || 0}轮`;
+  if (!d) return;
+  const isSavedHost = s.isHost && d.host === s.myId;
+  const isSavedPlayer = d.players && d.players[s.myId];
+  if (!isSavedHost && !isSavedPlayer) return;
+  const role = isSavedPlayer ? ROLES.find(r => r.id === d.players[s.myId].roleId) : null;
+  const identity = isSavedHost ? '主持人' : (role ? role.name : '未分配');
+  document.getElementById('reconnect-info').textContent = `房间 ${s.myRoom} · ${s.myName}（${identity}）· 第${d.round || 0}轮`;
   document.getElementById('reconnect-banner').style.display = 'block';
 })();
 
@@ -425,7 +433,7 @@ window.doReconnect = async function () {
   const d = await dbGet(s.myRoom);
   if (!d) { toast('房间已不存在'); localStorage.removeItem('cc_s'); return; }
   myId = s.myId; myName = s.myName; myRoom = s.myRoom; isHost = s.isHost;
-  const me = d.players[myId]; if (me) myRole = ROLES.find(r => r.id === me.roleId);
+  const me = d.players?.[myId]; if (me) myRole = ROLES.find(r => r.id === me.roleId);
   if (isHost) document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
   document.getElementById('lobby-code').textContent = myRoom;
   listenDB(myRoom, onRoomUpdate);
@@ -435,13 +443,21 @@ window.createRoom = async function () {
   const name = document.getElementById('host-name').value.trim();
   if (!name) { toast('请输入你的名字'); return; }
   const code = genCode();
-  myId = 'p_' + Date.now(); myName = name; myRoom = code; isHost = true; saveSession();
-  await dbSet(code, { host: myId, round: 0, phase: 'lobby', players: { [myId]: { name, color: COLORS[0], roleId: 0 } }, skillState: {}, skillEffects: {} });
+  myId = 'host_' + Date.now(); myName = name; myRoom = code; isHost = true; saveSession();
+  await dbSet(code, {
+    host: myId,
+    hostName: name,
+    round: 0,
+    phase: 'lobby',
+    players: {},
+    skillState: {},
+    skillEffects: {}
+  });
   listenDB(code, onRoomUpdate);
   showScreen('lobby');
   document.getElementById('lobby-code').textContent = code;
   document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
-  buildRoleGrid(); document.getElementById('role-assignment-card').style.display = 'block';
+  document.getElementById('role-assignment-card').style.display = 'none';
 };
 
 window.joinRoom = async function () {
@@ -450,9 +466,9 @@ window.joinRoom = async function () {
   if (!code || code.length !== 4) { toast('请输入4位房间码'); return; }
   if (!name) { toast('请输入你的名字'); return; }
   const d = await dbGet(code); if (!d) { toast('房间不存在'); return; }
-  const players = d.players || {}; const count = Object.keys(players).length;
+  const players = d.players || {}; const count = allPlayers(d).length;
   if (count >= 12) { toast('房间已满'); return; }
-  if (Object.values(players).some(p => p.name === name)) { toast('名字已被使用'); return; }
+  if (Object.values(players).some(p => p.name === name) || d.hostName === name) { toast('名字已被使用'); return; }
   myId = 'p_' + Date.now() + Math.random().toString(36).slice(2, 6);
   myName = name; myRoom = code; isHost = false; saveSession();
   d.players[myId] = { name, color: COLORS[count % COLORS.length], roleId: 0 };
@@ -506,16 +522,25 @@ function onRoomUpdate(d) {
 
 function renderLobby(d) {
   if (d.phase !== 'lobby') return;
+  showScreen('lobby');
   const players = allPlayers(d);
+  document.getElementById('lobby-code').textContent = myRoom || d.code || '';
   document.getElementById('player-count').textContent = players.length;
-  document.getElementById('player-list').innerHTML = players.map(p => {
+  if (isHost) {
+    document.getElementById('host-controls').innerHTML = `<button class="btn btn-gold btn-sm" onclick="startGame()">开始游戏</button>`;
+    document.getElementById('role-assignment-card').style.display = 'none';
+  } else {
+    document.getElementById('host-controls').innerHTML = '';
+    document.getElementById('role-assignment-card').style.display = 'block';
+  }
+  document.getElementById('player-list').innerHTML = players.length ? players.map(p => {
     const role = ROLES.find(r => r.id === p.roleId);
     return `<div class="player-item">
       <div class="avatar" style="background:${p.color}22;color:${p.color}">${p.name.slice(0, 2)}</div>
       <div class="player-info"><div class="player-name">${p.name}${p.id === myId ? ' <span style="font-size:11px;color:var(--text3)">(你)</span>' : ''}</div>
       <div class="player-role">${role ? role.name : '未分配'}</div></div>
       <span class="badge ${p.rolePrefs ? 'badge-green' : ''}">${p.rolePrefs ? '已选偏好' : '待选'}</span></div>`;
-  }).join('');
+  }).join('') : `<div style="font-size:13px;color:var(--text3);text-align:center;padding:1rem 0">等待玩家加入…</div>`;
 }
 
 // ── Deploy phase ──
@@ -532,6 +557,23 @@ function usesLeft(d, key, maxTotal, maxDouble) {
 function renderDeploy(d) {
   if (d.phase !== 'deploy') return;
   showScreen('deploy');
+  if (isHost) {
+    const round = d.round, isDouble = round >= 5;
+    document.getElementById('round-label').textContent = `第${round}轮${isDouble ? ' · 双倍得分' : ''}`;
+    document.getElementById('deploy-title').textContent = '主持人视角 · 等待玩家提交';
+    document.getElementById('round-badge').textContent = `${round}/6`;
+    document.getElementById('round-badge').className = 'badge' + (isDouble ? ' badge-gold' : '');
+    document.getElementById('my-role-display').innerHTML = `<div class="my-role-name">主持人</div><div class="my-role-skill">你不参与游戏，只负责开局、查看结算、手动调分和进入下一轮。</div>`;
+    document.getElementById('deploy-form').style.display = 'none';
+    hideAllSkillSections();
+    document.getElementById('submitted-overlay').style.display = 'block';
+    document.getElementById('waiting-title').textContent = '主持人观战中';
+    document.getElementById('waiting-desc').textContent = '等待所有玩家提交部署…';
+    document.getElementById('nongji-peek-phase').style.display = 'none';
+    document.getElementById('jiangyou-phase').style.display = 'none';
+    renderWaiting(d);
+    return;
+  }
   const round = d.round, isDouble = round >= 5;
   document.getElementById('round-label').textContent = `第${round}轮${isDouble ? ' · 双倍得分' : ''}`;
   document.getElementById('deploy-title').textContent = '秘密部署军队';
@@ -835,9 +877,9 @@ window.submitDeploy = async function () {
 async function checkAfterSubmit(oldData) {
   const fresh = await dbGet(myRoom);
   if (fresh.phase !== 'deploy') return;
-  const players = Object.keys(fresh.players || {});
+  const players = allPlayers(fresh).map(p => p.id);
   const deps = fresh.deploys || {};
-  const allSubmitted = players.every(pid => deps[pid]?.submitted);
+  const allSubmitted = players.length > 0 && players.every(pid => deps[pid]?.submitted);
   if (!allSubmitted) return;
 
   // 鸳鸯鸡绑的人技能失效
@@ -1117,7 +1159,7 @@ function renderJiangyouPhase(d) {
     if (existingOverview) existingOverview.remove();
     desc.textContent = `酱油鸡玩家正在移动军队，请稍候…`;
     document.getElementById('jiangyou-form').style.display = 'none';
-    if (d.deploys[jyPlayer?.id]?.jiangyouDone) calcResult(d);
+    if (jyPlayer && d.deploys[jyPlayer.id]?.jiangyouDone) calcResult(d);
   }
 }
 
