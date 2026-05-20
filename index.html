@@ -843,6 +843,15 @@ async function checkAfterSubmit(oldData) {
   const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
   const nongjiPeeked = fresh.skillState?.nongji_peeked || [];
   const availableTargets = allPlayers(fresh).filter(p => p.id !== nongjiPlayer?.id && !nongjiPeeked.includes(p.id));
+  console.log('nongji check:', {
+    hasNongjiPlayer: !!nongjiPlayer,
+    nongjiPlayerName: nongjiPlayer?.name,
+    yyBlocked: nongjiPlayer && yyBound.includes(nongjiPlayer.id),
+    peekedCount: nongjiPeeked.length,
+    availableCount: availableTargets.length,
+    skipped: fresh.deploys[nongjiPlayer?.id]?.nongjiSkipped,
+    done: fresh.deploys[nongjiPlayer?.id]?.nongjiRedeployDone
+  });
   if (nongjiPlayer && !yyBound.includes(nongjiPlayer.id) && availableTargets.length > 0 && !fresh.deploys[nongjiPlayer.id]?.nongjiSkipped && !fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) {
     fresh.phase = 'nongji_peek';
     await dbSet(myRoom, fresh); return;
@@ -999,6 +1008,8 @@ window.submitNongjiRedeploy = async function () {
 };
 window.skipNongjiRedeploy = async function () {
   const d = await dbGet(myRoom);
+  if (!d.deploys) d.deploys = {};
+  if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].nongjiRedeployDone = true;
   await dbSet(myRoom, d); toast('保持原部署');
   checkAfterNongji(d);
@@ -1007,8 +1018,10 @@ window.skipNongjiRedeploy = async function () {
 async function checkAfterNongji(d) {
   const fresh = await dbGet(myRoom);
   if (fresh.phase !== 'nongji_peek') return;
-  const eff = fresh.skillEffects[`nongji_r${fresh.round}`];
-  if (!fresh.deploys[eff.playerId]?.nongjiRedeployDone) return;
+  const nongjiPlayer = allPlayers(fresh).find(p => p.roleId === 4);
+  if (!nongjiPlayer) { calcResult(fresh); return; }
+  // 浓鸡汤本人必须已完成（重新部署或跳过）才能继续
+  if (!fresh.deploys[nongjiPlayer.id]?.nongjiRedeployDone) return;
   // 鸳鸯鸡绑的人技能失效
   const yy = fresh.skillEffects?.[`yuanyang_r${fresh.round}`];
   const yyBound = yy ? [yy.player, yy.target] : [];
@@ -1086,6 +1099,8 @@ window.submitJiangyou = async function () {
   const to = parseInt(document.getElementById('jy-to').value);
   if (!from || !to || from === to) { toast('请选择不同的城池'); return; }
   const d = await dbGet(myRoom);
+  if (!d.deploys) d.deploys = {};
+  if (!d.deploys[myId]) d.deploys[myId] = {};
   const troops = [...(d.deploys[myId]?.troops || Array(16).fill(0))];
   if (troops[from - 1] <= 0) { toast('该城池没有军队'); return; }
   troops[from - 1] -= 1;
@@ -1101,6 +1116,8 @@ window.submitJiangyou = async function () {
 };
 window.skipJiangyou = async function () {
   const d = await dbGet(myRoom);
+  if (!d.deploys) d.deploys = {};
+  if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].jiangyouDone = true;
   await dbSet(myRoom, d);
   calcResult(d);
