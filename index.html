@@ -612,7 +612,7 @@ function buildSkillSections(d) {
   const cityOpts = () => Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
   const playerOpts = (exclude) => allPlayers(d).filter(p => p.id !== exclude).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
-  if (myRole?.id === 1 && !myDep.lazijiDone) {
+  if (myRole?.id === 1 && !myDep.lazijiDone && !(d.skillState?.laziji_used)) {
     document.getElementById('laziji-section').style.display = 'block';
   }
   if (myRole?.id === 2 && round <= 4 && !myDep.zhajiDone) {
@@ -634,8 +634,13 @@ function buildSkillSections(d) {
     }
   }
   if (myRole?.id === 4 && !myDep.nongjiDone) {
-    document.getElementById('nongji-section').style.display = 'block';
-    document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
+    const peeked = d.skillState?.nongji_peeked || [];
+    const candidates = allPlayers(d).filter(p => p.id !== myId && !peeked.includes(p.id));
+    if (candidates.length > 0) {
+      document.getElementById('nongji-section').style.display = 'block';
+      document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + 
+        candidates.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    }
   }
   if (myRole?.id === 6 && !myDep.huangmenDone) {
     const left = usesLeft(d, 'huangmen', 3, 1);
@@ -688,6 +693,9 @@ async function incrementSkillUse(key, isDouble) {
 window.submitLaziji = async function () {
   const d = await dbGet(myRoom);
   d.skillEffects[`laziji_r${d.round}`] = { active: true, playerId: myId };
+  const st = d.skillState || {};
+  st.laziji_used = (st.laziji_used || 0) + 1;
+  d.skillState = st;
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].lazijiDone = true;
   await dbSet(myRoom, d);
@@ -732,7 +740,11 @@ window.submitNongji = async function () {
   const target = document.getElementById('nongji-target').value;
   if (!target) { toast('请选择玩家'); return; }
   const d = await dbGet(myRoom);
+  const peeked = d.skillState?.nongji_peeked || [];
+  if (peeked.includes(target)) { toast('这个玩家已经看过了'); return; }
   d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
+  if (!d.skillState) d.skillState = {};
+  d.skillState.nongji_peeked = [...peeked, target];
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].nongjiDone = true;
   await dbSet(myRoom, d);
@@ -882,11 +894,22 @@ function renderNongjiPeek(d) {
   // 浓鸡汤本人
   if (!eff || !eff.target) {
     // 第一步：选目标
-    desc.textContent = '所有人已提交，请选择一名玩家查看其部署，或跳过本轮技能';
-    const others = allPlayers(d).filter(p => p.id !== myId);
+    const peeked = d.skillState?.nongji_peeked || [];
+    const others = allPlayers(d).filter(p => p.id !== myId && !peeked.includes(p.id));
+    if (others.length === 0) {
+      // 已经看过所有人了
+      desc.textContent = '所有玩家都已经查看过，本轮无可用目标';
+      document.getElementById('nongji-peek-content').innerHTML = `
+        <div class="card" style="margin-bottom:1rem">
+          <button class="btn btn-gold" style="width:100%" onclick="skipNongjiLate()">跳过本轮</button>
+        </div>`;
+      document.getElementById('nongji-redeploy-form').style.display = 'none';
+      return;
+    }
+    desc.textContent = '所有人已提交，请选择一名未查看过的玩家，或跳过本轮技能';
     document.getElementById('nongji-peek-content').innerHTML = `
       <div class="card" style="margin-bottom:1rem">
-        <div class="card-title">选择查看对象</div>
+        <div class="card-title">选择查看对象${peeked.length > 0 ? `（已看过 ${peeked.length} 人）` : ''}</div>
         <select id="nongji-target-late" style="margin-bottom:8px;width:100%">
           <option value="">-- 选择玩家 --</option>
           ${others.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
@@ -923,8 +946,13 @@ window.submitNongjiLate = async function () {
   const target = document.getElementById('nongji-target-late').value;
   if (!target) { toast('请选择玩家'); return; }
   const d = await dbGet(myRoom);
+  const peeked = d.skillState?.nongji_peeked || [];
+  if (peeked.includes(target)) { toast('这个玩家已经看过了'); return; }
   if (!d.skillEffects) d.skillEffects = {};
   d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
+  // 标记已看
+  if (!d.skillState) d.skillState = {};
+  d.skillState.nongji_peeked = [...peeked, target];
   await dbSet(myRoom, d);
 };
 
@@ -1006,7 +1034,9 @@ function renderJiangyouPhase(d) {
   const desc = document.getElementById('jiangyou-desc');
 
   if (isJYPlayer) {
-    desc.textContent = '现在可以查看所有玩家的部署后移动你的1枚军队（计分前生效）。';
+    const jyLeft = usesLeft(d, 'jiangyou', 3, 1);
+    const isDouble = d.round >= 5;
+    desc.textContent = `查看所有玩家的部署后移动你的1枚军队（剩余 ${jyLeft} 次${isDouble ? '，5/6轮限1次' : ''}）。`;
     document.getElementById('jiangyou-form').style.display = 'block';
     const myTroops = d.deploys[myId]?.troops || Array(16).fill(0);
     const fromOpts = myTroops.map((t, i) => t > 0 ? `<option value="${i + 1}">${i + 1}号城（${t}兵）</option>` : '').filter(Boolean).join('');
