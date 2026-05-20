@@ -1590,7 +1590,8 @@ window.skipJiangyou = async function () {
 
 // ── Calc result ──
 async function calcResult(data) {
-  const fresh = data || await dbGet(myRoom);
+  const fresh = await dbGet(myRoom); // 始终从数据库取最新数据，避免竞态导致用旧 deploys 结算
+  if (!fresh) return;
   if (fresh.phase === 'result' || fresh.phase === 'final') return;
 
   const round = fresh.round, isDouble = round >= 5;
