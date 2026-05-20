@@ -708,7 +708,7 @@ function renderDeploy(d) {
   if (myDep.submitted) {
     document.getElementById('submitted-overlay').style.display = 'block';
     document.getElementById('waiting-title').textContent = '已提交，可继续修改';
-    document.getElementById('waiting-desc').textContent = '主持人锁定结算前，你仍可以调整兵力并点击“更新部署”。若被鸳鸯鸡绑定，原部署会作废，需要按17兵重新提交。';
+    document.getElementById('waiting-desc').textContent = '主持人锁定结算前，你仍可以调整兵力和技能选择，并点击“更新部署”。若被鸳鸯鸡绑定，原部署会作废，需要按17兵重新提交。';
     renderWaiting(d);
   } else {
     document.getElementById('submitted-overlay').style.display = 'none';
@@ -749,51 +749,77 @@ function buildSkillSections(d) {
   const yyEff = effects[`yuanyang_r${round}`];
   const isYuanyangPartner = yyEff && (yyEff.target === myId || yyEff.player === myId);
   const hasYuanyangLocked = !!yyEff;
-  // 鸳鸯鸡合作者不能用其他技能
+  // 鸳鸯鸡合作者不能用其他技能；鸳鸯鸡一旦绑定，本轮不可更改/取消。
   if (isYuanyangPartner) return;
 
-  const cityOpts = () => Array.from({ length: 16 }, (_, i) => `<option value="${i + 1}">${i + 1}号城</option>`).join('');
-  const playerOpts = (exclude) => allPlayers(d).filter(p => p.id !== exclude).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const cityOpts = (selected = '') => Array.from({ length: 16 }, (_, i) => {
+    const v = i + 1;
+    return `<option value="${v}" ${String(selected) === String(v) ? 'selected' : ''}>${v}号城</option>`;
+  }).join('');
+  const playerOpts = (exclude, selected = '') => allPlayers(d)
+    .filter(p => p.id !== exclude)
+    .map(p => `<option value="${p.id}" ${selected === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
 
-  if (myRole?.id === 1 && !myDep.lazijiDone && !(d.skillState?.laziji_used)) {
+  const showStatus = (id, text) => {
+    const card = document.querySelector(`#${id}-section .skill-card-desc`);
+    if (!card || !text) return;
+    if (!card.dataset.baseText) card.dataset.baseText = card.textContent;
+    card.textContent = card.dataset.baseText + text;
+  };
+
+  // 这些技能在主持人锁定结算前都允许修改/取消。已使用的技能不会重复消耗次数，改选时会先撤销旧选择再写入新选择。
+  if (myRole?.id === 1 && (!d.skillState?.laziji_used || myDep.lazijiDone)) {
     document.getElementById('laziji-section').style.display = 'block';
+    if (d.skillEffects?.[`laziji_r${round}`]?.playerId === myId) showStatus('laziji', '（当前已选择发动，可在锁定前取消。）');
   }
-  if (myRole?.id === 2 && round <= 4 && !myDep.zhajiDone) {
+
+  if (myRole?.id === 2 && round <= 4) {
+    const already = !!myDep.zhajiDone;
     const left = usesLeft(d, 'zhaji', 1, 0);
-    if (left > 0) {
+    if (left > 0 || already) {
+      const eff = d.skillEffects?.[`zhaji_r${round}`];
       document.getElementById('zhaji-section').style.display = 'block';
-      document.getElementById('zhaji-uses').textContent = `前4轮限用1次`;
-      document.getElementById('zhaji-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts();
+      document.getElementById('zhaji-uses').textContent = already ? '当前已选择，可修改或取消' : '前4轮限用1次';
+      document.getElementById('zhaji-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts(eff?.playerId === myId ? eff.city : '');
     }
   }
-  if (myRole?.id === 3 && !myDep.keleDone) {
+
+  if (myRole?.id === 3) {
+    const already = !!myDep.keleDone;
     const left = usesLeft(d, 'kele', 3, 1);
-    if (left > 0) {
+    if (left > 0 || already) {
+      const eff = d.skillEffects?.[`kele_r${round}`];
       document.getElementById('kele-section').style.display = 'block';
-      document.getElementById('kele-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
-      const opts = cityOpts();
-      document.getElementById('kele-city1').innerHTML = opts;
-      document.getElementById('kele-city2').innerHTML = opts;
+      document.getElementById('kele-uses').textContent = already ? '当前已选择，可修改或取消' : `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      document.getElementById('kele-city1').innerHTML = cityOpts(eff?.playerId === myId ? eff.c1 : '');
+      document.getElementById('kele-city2').innerHTML = cityOpts(eff?.playerId === myId ? eff.c2 : '');
     }
   }
-  if (myRole?.id === 4 && !myDep.nongjiDone) {
+
+  if (myRole?.id === 4) {
+    const already = !!myDep.nongjiDone;
+    const currentEff = d.skillEffects?.[`nongji_r${round}`];
     const peeked = d.skillState?.nongji_peeked || [];
-    const candidates = allPlayers(d).filter(p => p.id !== myId && !peeked.includes(p.id));
-    if (candidates.length > 0) {
+    const candidates = allPlayers(d).filter(p => p.id !== myId && (!peeked.includes(p.id) || currentEff?.target === p.id));
+    if (candidates.length > 0 || already) {
       document.getElementById('nongji-section').style.display = 'block';
-      document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + 
-        candidates.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      document.getElementById('nongji-target').innerHTML = `<option value="">-- 选择玩家 --</option>` +
+        candidates.map(p => `<option value="${p.id}" ${currentEff?.target === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
     }
   }
-  if (myRole?.id === 6 && !myDep.huangmenDone) {
+
+  if (myRole?.id === 6) {
+    const already = !!myDep.huangmenDone;
     const left = usesLeft(d, 'huangmen', 3, 1);
-    if (left > 0) {
+    if (left > 0 || already) {
+      const eff = d.skillEffects?.[`huangmen_r${round}`];
       document.getElementById('huangmen-section').style.display = 'block';
-      document.getElementById('huangmen-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
-      document.getElementById('huangmen-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts();
+      document.getElementById('huangmen-uses').textContent = already ? '当前已选择，可修改或取消' : `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      document.getElementById('huangmen-city').innerHTML = `<option value="">-- 选择城池 --</option>` + cityOpts(eff?.playerId === myId ? eff.city : '');
     }
   }
-  if (myRole?.id === 7 && !myDep.yuanyangDone && !hasYuanyangLocked) {
+
+  if (myRole?.id === 7 && !hasYuanyangLocked) {
     const left = usesLeft(d, 'yuanyang', 3, 1);
     if (left > 0) {
       document.getElementById('yuanyang-section').style.display = 'block';
@@ -801,11 +827,17 @@ function buildSkillSections(d) {
       document.getElementById('yuanyang-target').innerHTML = `<option value="">-- 选择玩家 --</option>` + playerOpts(myId);
     }
   }
-  if (myRole?.id === 9 && !myDep.dapanDone) {
+
+  if (myRole?.id === 9) {
+    const already = !!myDep.dapanDone;
     const left = usesLeft(d, 'dapan', 3, 1);
-    if (left > 0) {
+    if (left > 0 || already) {
       document.getElementById('dapan-section').style.display = 'block';
-      document.getElementById('dapan-uses').textContent = `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      document.getElementById('dapan-uses').textContent = already ? '当前已选择，可修改或取消' : `剩余次数：${left}${isDouble ? '（双倍轮限1次）' : ''}`;
+      if (myDep.dapanExtra) {
+        document.getElementById('dapan-extra').value = myDep.dapanExtra;
+        document.getElementById('dapan-label').textContent = `总计 ${12 + myDep.dapanExtra} 兵`;
+      }
     }
   }
 }
@@ -897,8 +929,67 @@ function resetYuanyangDeploy(d, pid) {
   dep.yuanyangBoundReset = true;
 }
 
+function clearCurrentSkillSelection(d, pid, key) {
+  const round = d.round;
+  const isDouble = round >= 5;
+  d.skillState = d.skillState || {};
+  d.skillEffects = d.skillEffects || {};
+  d.deploys = d.deploys || {};
+  if (!d.deploys[pid]) d.deploys[pid] = {};
+  const dep = d.deploys[pid];
+  const st = d.skillState;
+
+  const deleteOwnedEffect = (effectKey, countKey = key) => {
+    const eff = d.skillEffects[effectKey];
+    if (!eff) return false;
+    const owner = eff.playerId || eff.player;
+    if (owner !== pid) return false;
+    delete d.skillEffects[effectKey];
+    if (countKey !== 'nongji') refundSkillUse(st, countKey, isDouble);
+    return true;
+  };
+
+  if (key === 'laziji') {
+    deleteOwnedEffect(`laziji_r${round}`, 'laziji');
+    delete dep.lazijiDone;
+  }
+  if (key === 'zhaji') {
+    deleteOwnedEffect(`zhaji_r${round}`, 'zhaji');
+    delete dep.zhajiDone;
+  }
+  if (key === 'kele') {
+    deleteOwnedEffect(`kele_r${round}`, 'kele');
+    delete dep.keleDone;
+  }
+  if (key === 'nongji') {
+    deleteOwnedEffect(`nongji_r${round}`, 'nongji');
+    delete dep.nongjiDone;
+    delete dep.nongjiSkipped;
+    delete dep.nongjiRedeployDone;
+  }
+  if (key === 'huangmen') {
+    deleteOwnedEffect(`huangmen_r${round}`, 'huangmen');
+    delete dep.huangmenDone;
+  }
+  if (key === 'dapan') {
+    if (dep.dapanDone) refundSkillUse(st, 'dapan', isDouble);
+    delete dep.dapanDone;
+    delete dep.dapanExtra;
+  }
+}
+
+function ensureDeployEditable(d) {
+  if (d.phase !== 'deploy') {
+    toast('主持人已锁定本轮，不能再修改技能');
+    return false;
+  }
+  return true;
+}
+
 window.submitLaziji = async function () {
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'laziji');
   d.skillEffects[`laziji_r${d.round}`] = { active: true, playerId: myId };
   const st = d.skillState || {};
   st.laziji_used = (st.laziji_used || 0) + 1;
@@ -906,24 +997,41 @@ window.submitLaziji = async function () {
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].lazijiDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('laziji-section').style.display = 'none';
-  toast('火辣袭击已激活，提交部署后生效 ✓');
+  toast('火辣袭击已选择；锁定前可取消 ✓');
 };
-window.skipLaziji = async function () { await patchDeploy({ lazijiDone: true }); document.getElementById('laziji-section').style.display = 'none'; };
+window.skipLaziji = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'laziji');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].lazijiDone = true;
+  await dbSet(myRoom, d);
+  toast('已取消/不使用火辣袭击');
+};
 
 window.submitZhaji = async function () {
   const city = parseInt(document.getElementById('zhaji-city').value);
   if (!city) { toast('请选择城池'); return; }
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'zhaji');
   d.skillEffects[`zhaji_r${d.round}`] = { city, playerId: myId };
   d.skillState = d.skillState || {};
   d.skillState.zhaji_used = (d.skillState.zhaji_used || 0) + 1;
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].zhajiDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('zhaji-section').style.display = 'none'; toast(`炸鸡已投放至 ${city}号城 ✓`);
+  toast(`炸鸡已选择 ${city}号城；锁定前可修改 ✓`);
 };
-window.skipZhaji = async function () { await patchDeploy({ zhajiDone: true }); document.getElementById('zhaji-section').style.display = 'none'; };
+window.skipZhaji = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'zhaji');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].zhajiDone = true;
+  await dbSet(myRoom, d);
+  toast('已取消/不使用炸鸡');
+};
 
 window.submitKele = async function () {
   const c1 = parseInt(document.getElementById('kele-city1').value);
@@ -931,6 +1039,8 @@ window.submitKele = async function () {
   if (!c1 || !c2 || c1 === c2) { toast('请选择两个不同的城池'); return; }
   if (Math.abs(c1 - c2) > 6) { toast('两城编号差值不能超过6'); return; }
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'kele');
   d.skillEffects[`kele_r${d.round}`] = { c1, c2, playerId: myId };
   const st = d.skillState || {};
   st.kele_used = (st.kele_used || 0) + 1;
@@ -939,35 +1049,52 @@ window.submitKele = async function () {
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].keleDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('kele-section').style.display = 'none'; toast(`已调换 ${c1}号 ↔ ${c2}号城 ✓`);
+  toast(`已选择调换 ${c1}号 ↔ ${c2}号城；锁定前可修改 ✓`);
 };
-window.skipKele = async function () { await patchDeploy({ keleDone: true }); document.getElementById('kele-section').style.display = 'none'; };
+window.skipKele = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'kele');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].keleDone = true;
+  await dbSet(myRoom, d);
+  toast('已取消/不使用甜咸互换');
+};
 
 window.submitNongji = async function () {
   const target = document.getElementById('nongji-target').value;
   if (!target) { toast('请选择玩家'); return; }
-
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  const current = d.skillEffects?.[`nongji_r${d.round}`];
   const peeked = d.skillState?.nongji_peeked || [];
-  if (peeked.includes(target)) { toast('这个玩家已经看过了'); return; }
-
+  if (peeked.includes(target) && current?.target !== target) { toast('这个玩家已经看过了'); return; }
+  clearCurrentSkillSelection(d, myId, 'nongji');
   if (!d.skillEffects) d.skillEffects = {};
   d.skillEffects[`nongji_r${d.round}`] = { target, playerId: myId };
-
   if (!d.deploys) d.deploys = {};
   if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].nongjiDone = true;
-
   await dbSet(myRoom, d);
-  document.getElementById('nongji-section').style.display = 'none';
-  toast('鸡汤慢炖：将在所有人提交后查看 ✓');
+  toast('鸡汤慢炖目标已选择；锁定前可修改 ✓');
 };
-window.skipNongji = async function () { await patchDeploy({ nongjiDone: true }); document.getElementById('nongji-section').style.display = 'none'; };
+window.skipNongji = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'nongji');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].nongjiDone = true;
+  d.deploys[myId].nongjiSkipped = true;
+  await dbSet(myRoom, d);
+  toast('已取消/不使用鸡汤慢炖');
+};
 
 window.submitHuangmen = async function () {
   const city = parseInt(document.getElementById('huangmen-city').value);
   if (!city) { toast('请选择城池'); return; }
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'huangmen');
   d.skillEffects[`huangmen_r${d.round}`] = { city, playerId: myId };
   const st = d.skillState || {};
   st.huangmen_used = (st.huangmen_used || 0) + 1;
@@ -976,14 +1103,23 @@ window.submitHuangmen = async function () {
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].huangmenDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('huangmen-section').style.display = 'none'; toast(`已选 ${city}号城 ✓`);
+  toast(`黄焖鸡已选择 ${city}号城；锁定前可修改 ✓`);
 };
-window.skipHuangmen = async function () { await patchDeploy({ huangmenDone: true }); document.getElementById('huangmen-section').style.display = 'none'; };
+window.skipHuangmen = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'huangmen');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].huangmenDone = true;
+  await dbSet(myRoom, d);
+  toast('已取消/不使用双倍滋味');
+};
 
 window.submitYuanyang = async function () {
   const target = document.getElementById('yuanyang-target').value;
   if (!target) { toast('请选择合作玩家'); return; }
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
   if (!d.skillEffects) d.skillEffects = {};
   if (d.skillEffects[`yuanyang_r${d.round}`]) {
     toast('本轮鸳鸯鸡绑定已经确定，不能更改');
@@ -1007,7 +1143,6 @@ window.submitYuanyang = async function () {
 
   await dbSet(myRoom, d);
   currentDeployData[d.round] = Array(17).fill(0);
-  document.getElementById('yuanyang-section').style.display = 'none';
   const targetName = d.players?.[target]?.name || '目标玩家';
   toast(`已与 ${targetName} 公开绑定合作。双方原部署作废，请按17兵重新提交 ✓`);
 };
@@ -1017,6 +1152,8 @@ window.submitDapan = async function () {
   const extra = parseInt(document.getElementById('dapan-extra').value) || 0;
   if (extra < 1 || extra > 12) { toast('请输入1到12之间的数字'); return; }
   const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'dapan');
   const st = d.skillState || {};
   st.dapan_used = (st.dapan_used || 0) + 1;
   if (d.round >= 5) st.dapan_usedDouble = (st.dapan_usedDouble || 0) + 1;
@@ -1024,12 +1161,21 @@ window.submitDapan = async function () {
   if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
   d.deploys[myId].dapanExtra = extra; d.deploys[myId].dapanDone = true;
   await dbSet(myRoom, d);
-  document.getElementById('dapan-section').style.display = 'none';
   currentMaxArmy = 12 + extra;
   updateArmyBar(d.round, currentMaxArmy, 'army-fill', 'army-count');
-  toast(`已申请额外 ${extra} 兵，总计 ${currentMaxArmy}`);
+  toast(`已申请额外 ${extra} 兵，总计 ${currentMaxArmy}；锁定前可修改 ✓`);
 };
-window.skipDapan = async function () { await patchDeploy({ dapanDone: true }); document.getElementById('dapan-section').style.display = 'none'; };
+window.skipDapan = async function () {
+  const d = await dbGet(myRoom);
+  if (!ensureDeployEditable(d)) return;
+  clearCurrentSkillSelection(d, myId, 'dapan');
+  if (!d.deploys) d.deploys = {}; if (!d.deploys[myId]) d.deploys[myId] = {};
+  d.deploys[myId].dapanDone = true;
+  await dbSet(myRoom, d);
+  currentMaxArmy = 12;
+  updateArmyBar(d.round, currentMaxArmy, 'army-fill', 'army-count');
+  toast('已取消/不使用加量吃撑');
+};
 
 // ── Submit deploy ──
 window.submitDeploy = async function () {
